@@ -6,9 +6,43 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/rslarson/terraform-provider-unifi/internal/client"
 )
+
+// importCompositeState parses a "site_id/resource_id" import string and sets
+// the site_id and id attributes on the state.
+func importCompositeState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	siteID, resourceID, err := parseCompositeID(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid import ID", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("site_id"), siteID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), resourceID)...)
+}
+
+// deviceAPIToModel maps a client.Device response to a DeviceDataSourceModel.
+func deviceAPIToModel(model *DeviceDataSourceModel, result *client.Device) {
+	model.MacAddress = types.StringValue(result.MacAddress)
+	model.IPAddress = types.StringValue(result.IPAddress)
+	model.Name = types.StringValue(result.Name)
+	model.Model = types.StringValue(result.Model)
+	model.Supported = types.BoolValue(result.Supported)
+	model.State = types.StringValue(result.State)
+	model.FirmwareVersion = types.StringValue(result.FirmwareVersion)
+	model.FirmwareUpdatable = types.BoolValue(result.FirmwareUpdatable)
+	model.AdoptedAt = types.StringValue(result.AdoptedAt)
+	model.ProvisionedAt = types.StringValue(result.ProvisionedAt)
+	model.ConfigurationID = types.StringValue(result.ConfigurationID)
+	if result.Uplink != nil {
+		model.UplinkDeviceID = types.StringValue(result.Uplink.DeviceID)
+	} else {
+		model.UplinkDeviceID = types.StringNull()
+	}
+}
 
 // extractClient extracts the *client.Client from provider data, returning diagnostics on failure.
 func extractClient(providerData interface{}, typeName string) (*client.Client, diag.Diagnostics) {
@@ -57,20 +91,20 @@ func networkAPIToModel(ctx context.Context, result *client.Network) (name types.
 	return
 }
 
-// networkModelToAPI converts Terraform model fields into a client.Network.
-func networkModelToAPI(ctx context.Context, name string, management string, enabled bool, vlanID int64, dhcpIPs types.List) (*client.Network, diag.Diagnostics) {
+// networkModelToAPI converts a NetworkResourceModel into a client.Network.
+func networkModelToAPI(ctx context.Context, model NetworkResourceModel) (*client.Network, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
 	network := &client.Network{
-		Name:       name,
-		Management: management,
-		Enabled:    enabled,
-		VlanID:     int(vlanID),
+		Name:       model.Name.ValueString(),
+		Management: model.Management.ValueString(),
+		Enabled:    model.Enabled.ValueBool(),
+		VlanID:     int(model.VlanID.ValueInt64()),
 	}
 
-	if !dhcpIPs.IsNull() {
+	if !model.TrustedDhcpServerIPAddresses.IsNull() {
 		var ips []string
-		diags.Append(dhcpIPs.ElementsAs(ctx, &ips, false)...)
+		diags.Append(model.TrustedDhcpServerIPAddresses.ElementsAs(ctx, &ips, false)...)
 		if diags.HasError() {
 			return nil, diags
 		}
@@ -149,16 +183,16 @@ func wifiBroadcastModelToAPI(plan WifiBroadcastResourceModel) *client.WifiBroadc
 	return broadcast
 }
 
-// firewallZoneModelToAPI converts Terraform model fields into a client.FirewallZone.
-func firewallZoneModelToAPI(ctx context.Context, name string, networkIDs types.List) (*client.FirewallZone, diag.Diagnostics) {
+// firewallZoneModelToAPI converts a FirewallZoneResourceModel into a client.FirewallZone.
+func firewallZoneModelToAPI(ctx context.Context, model FirewallZoneResourceModel) (*client.FirewallZone, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	var ids []string
-	diags.Append(networkIDs.ElementsAs(ctx, &ids, false)...)
+	diags.Append(model.NetworkIDs.ElementsAs(ctx, &ids, false)...)
 	if diags.HasError() {
 		return nil, diags
 	}
 	return &client.FirewallZone{
-		Name:       name,
+		Name:       model.Name.ValueString(),
 		NetworkIDs: ids,
 	}, diags
 }

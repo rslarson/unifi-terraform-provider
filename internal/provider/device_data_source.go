@@ -125,23 +125,7 @@ func (d *DeviceDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 		return
 	}
 
-	config.MacAddress = types.StringValue(result.MacAddress)
-	config.IPAddress = types.StringValue(result.IPAddress)
-	config.Name = types.StringValue(result.Name)
-	config.Model = types.StringValue(result.Model)
-	config.Supported = types.BoolValue(result.Supported)
-	config.State = types.StringValue(result.State)
-	config.FirmwareVersion = types.StringValue(result.FirmwareVersion)
-	config.FirmwareUpdatable = types.BoolValue(result.FirmwareUpdatable)
-	config.AdoptedAt = types.StringValue(result.AdoptedAt)
-	config.ProvisionedAt = types.StringValue(result.ProvisionedAt)
-	config.ConfigurationID = types.StringValue(result.ConfigurationID)
-
-	if result.Uplink != nil {
-		config.UplinkDeviceID = types.StringValue(result.Uplink.DeviceID)
-	} else {
-		config.UplinkDeviceID = types.StringNull()
-	}
+	deviceAPIToModel(&config, result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, config)...)
 }

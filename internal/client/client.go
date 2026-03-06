@@ -119,12 +119,11 @@ func (c *Client) executeRequest(req *http.Request, result interface{}) error {
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %w", err)
-	}
-
 	if resp.StatusCode >= 400 {
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("reading error response body: %w", err)
+		}
 		var apiErr APIError
 		if err := json.Unmarshal(respBody, &apiErr); err != nil {
 			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(respBody))
@@ -132,9 +131,9 @@ func (c *Client) executeRequest(req *http.Request, result interface{}) error {
 		return &apiErr
 	}
 
-	if result != nil && len(respBody) > 0 {
-		if err := json.Unmarshal(respBody, result); err != nil {
-			return fmt.Errorf("unmarshaling response: %w", err)
+	if result != nil {
+		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+			return fmt.Errorf("decoding response: %w", err)
 		}
 	}
 
@@ -168,18 +167,41 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 // doList performs a paginated GET request with the maximum page size.
 // Note: currently fetches only the first page (up to 200 items).
 func (c *Client) doList(ctx context.Context, path string, result interface{}) error {
-	fullURL := c.buildURL(path)
+	return c.do(ctx, http.MethodGet, path+"?limit="+defaultPageSize, nil, result)
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
-	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
+// Generic CRUD helpers that eliminate per-resource boilerplate.
+
+func doCreate[T any](c *Client, ctx context.Context, path string, body *T) (*T, error) {
+	var result T
+	if err := c.do(ctx, http.MethodPost, path, body, &result); err != nil {
+		return nil, err
 	}
+	return &result, nil
+}
 
-	q := req.URL.Query()
-	q.Set("limit", defaultPageSize)
-	req.URL.RawQuery = q.Encode()
+func doGet[T any](c *Client, ctx context.Context, path string) (*T, error) {
+	var result T
+	if err := c.do(ctx, http.MethodGet, path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
 
-	return c.executeRequest(req, result)
+func doUpdate[T any](c *Client, ctx context.Context, path string, body *T) (*T, error) {
+	var result T
+	if err := c.do(ctx, http.MethodPut, path, body, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func doListAll[T any](c *Client, ctx context.Context, path string) ([]T, error) {
+	var resp PaginatedResponse[T]
+	if err := c.doList(ctx, path, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
 }
 
 // --- Site operations ---
@@ -191,11 +213,7 @@ type Site struct {
 }
 
 func (c *Client) ListSites(ctx context.Context) ([]Site, error) {
-	var resp PaginatedResponse[Site]
-	if err := c.doList(ctx, "sites", &resp); err != nil {
-		return nil, err
-	}
-	return resp.Data, nil
+	return doListAll[Site](c, ctx, "sites")
 }
 
 // --- Network operations ---
@@ -219,47 +237,23 @@ type DhcpGuarding struct {
 }
 
 func (c *Client) CreateNetwork(ctx context.Context, siteID string, network *Network) (*Network, error) {
-	var result Network
-	path := fmt.Sprintf("sites/%s/networks", siteID)
-	err := c.do(ctx, http.MethodPost, path, network, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doCreate(c, ctx, fmt.Sprintf("sites/%s/networks", siteID), network)
 }
 
 func (c *Client) GetNetwork(ctx context.Context, siteID, networkID string) (*Network, error) {
-	var result Network
-	path := fmt.Sprintf("sites/%s/networks/%s", siteID, networkID)
-	err := c.do(ctx, http.MethodGet, path, nil, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doGet[Network](c, ctx, fmt.Sprintf("sites/%s/networks/%s", siteID, networkID))
 }
 
 func (c *Client) UpdateNetwork(ctx context.Context, siteID, networkID string, network *Network) (*Network, error) {
-	var result Network
-	path := fmt.Sprintf("sites/%s/networks/%s", siteID, networkID)
-	err := c.do(ctx, http.MethodPut, path, network, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doUpdate(c, ctx, fmt.Sprintf("sites/%s/networks/%s", siteID, networkID), network)
 }
 
 func (c *Client) DeleteNetwork(ctx context.Context, siteID, networkID string) error {
-	path := fmt.Sprintf("sites/%s/networks/%s", siteID, networkID)
-	return c.do(ctx, http.MethodDelete, path, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("sites/%s/networks/%s", siteID, networkID), nil, nil)
 }
 
 func (c *Client) ListNetworks(ctx context.Context, siteID string) ([]Network, error) {
-	var resp PaginatedResponse[Network]
-	path := fmt.Sprintf("sites/%s/networks", siteID)
-	if err := c.doList(ctx, path, &resp); err != nil {
-		return nil, err
-	}
-	return resp.Data, nil
+	return doListAll[Network](c, ctx, fmt.Sprintf("sites/%s/networks", siteID))
 }
 
 // --- WiFi Broadcast operations ---
@@ -289,38 +283,19 @@ type BroadcastNetwork struct {
 }
 
 func (c *Client) CreateWifiBroadcast(ctx context.Context, siteID string, broadcast *WifiBroadcast) (*WifiBroadcast, error) {
-	var result WifiBroadcast
-	path := fmt.Sprintf("sites/%s/wifi/broadcasts", siteID)
-	err := c.do(ctx, http.MethodPost, path, broadcast, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doCreate(c, ctx, fmt.Sprintf("sites/%s/wifi/broadcasts", siteID), broadcast)
 }
 
 func (c *Client) GetWifiBroadcast(ctx context.Context, siteID, broadcastID string) (*WifiBroadcast, error) {
-	var result WifiBroadcast
-	path := fmt.Sprintf("sites/%s/wifi/broadcasts/%s", siteID, broadcastID)
-	err := c.do(ctx, http.MethodGet, path, nil, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doGet[WifiBroadcast](c, ctx, fmt.Sprintf("sites/%s/wifi/broadcasts/%s", siteID, broadcastID))
 }
 
 func (c *Client) UpdateWifiBroadcast(ctx context.Context, siteID, broadcastID string, broadcast *WifiBroadcast) (*WifiBroadcast, error) {
-	var result WifiBroadcast
-	path := fmt.Sprintf("sites/%s/wifi/broadcasts/%s", siteID, broadcastID)
-	err := c.do(ctx, http.MethodPut, path, broadcast, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doUpdate(c, ctx, fmt.Sprintf("sites/%s/wifi/broadcasts/%s", siteID, broadcastID), broadcast)
 }
 
 func (c *Client) DeleteWifiBroadcast(ctx context.Context, siteID, broadcastID string) error {
-	path := fmt.Sprintf("sites/%s/wifi/broadcasts/%s", siteID, broadcastID)
-	return c.do(ctx, http.MethodDelete, path, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("sites/%s/wifi/broadcasts/%s", siteID, broadcastID), nil, nil)
 }
 
 // --- Firewall Zone operations ---
@@ -333,38 +308,19 @@ type FirewallZone struct {
 }
 
 func (c *Client) CreateFirewallZone(ctx context.Context, siteID string, zone *FirewallZone) (*FirewallZone, error) {
-	var result FirewallZone
-	path := fmt.Sprintf("sites/%s/firewall/zones", siteID)
-	err := c.do(ctx, http.MethodPost, path, zone, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doCreate(c, ctx, fmt.Sprintf("sites/%s/firewall/zones", siteID), zone)
 }
 
 func (c *Client) GetFirewallZone(ctx context.Context, siteID, zoneID string) (*FirewallZone, error) {
-	var result FirewallZone
-	path := fmt.Sprintf("sites/%s/firewall/zones/%s", siteID, zoneID)
-	err := c.do(ctx, http.MethodGet, path, nil, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doGet[FirewallZone](c, ctx, fmt.Sprintf("sites/%s/firewall/zones/%s", siteID, zoneID))
 }
 
 func (c *Client) UpdateFirewallZone(ctx context.Context, siteID, zoneID string, zone *FirewallZone) (*FirewallZone, error) {
-	var result FirewallZone
-	path := fmt.Sprintf("sites/%s/firewall/zones/%s", siteID, zoneID)
-	err := c.do(ctx, http.MethodPut, path, zone, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doUpdate(c, ctx, fmt.Sprintf("sites/%s/firewall/zones/%s", siteID, zoneID), zone)
 }
 
 func (c *Client) DeleteFirewallZone(ctx context.Context, siteID, zoneID string) error {
-	path := fmt.Sprintf("sites/%s/firewall/zones/%s", siteID, zoneID)
-	return c.do(ctx, http.MethodDelete, path, nil, nil)
+	return c.do(ctx, http.MethodDelete, fmt.Sprintf("sites/%s/firewall/zones/%s", siteID, zoneID), nil, nil)
 }
 
 // --- Device operations ---
@@ -396,20 +352,9 @@ type DeviceFeatures struct {
 }
 
 func (c *Client) GetDevice(ctx context.Context, siteID, deviceID string) (*Device, error) {
-	var result Device
-	path := fmt.Sprintf("sites/%s/devices/%s", siteID, deviceID)
-	err := c.do(ctx, http.MethodGet, path, nil, &result)
-	if err != nil {
-		return nil, err
-	}
-	return &result, nil
+	return doGet[Device](c, ctx, fmt.Sprintf("sites/%s/devices/%s", siteID, deviceID))
 }
 
 func (c *Client) ListDevices(ctx context.Context, siteID string) ([]Device, error) {
-	var resp PaginatedResponse[Device]
-	path := fmt.Sprintf("sites/%s/devices", siteID)
-	if err := c.doList(ctx, path, &resp); err != nil {
-		return nil, err
-	}
-	return resp.Data, nil
+	return doListAll[Device](c, ctx, fmt.Sprintf("sites/%s/devices", siteID))
 }

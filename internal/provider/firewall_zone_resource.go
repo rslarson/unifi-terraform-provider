@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -83,7 +82,7 @@ func (r *FirewallZoneResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	zone, diags := firewallZoneModelToAPI(ctx, plan.Name.ValueString(), plan.NetworkIDs)
+	zone, diags := firewallZoneModelToAPI(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -138,7 +137,7 @@ func (r *FirewallZoneResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	zone, diags := firewallZoneModelToAPI(ctx, plan.Name.ValueString(), plan.NetworkIDs)
+	zone, diags := firewallZoneModelToAPI(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -172,11 +171,5 @@ func (r *FirewallZoneResource) Delete(ctx context.Context, req resource.DeleteRe
 }
 
 func (r *FirewallZoneResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	siteID, resourceID, err := parseCompositeID(req.ID)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid import ID", err.Error())
-		return
-	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("site_id"), siteID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), resourceID)...)
+	importCompositeState(ctx, req, resp)
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -107,7 +106,7 @@ func (r *NetworkResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	network, diags := networkModelToAPI(ctx, plan.Name.ValueString(), plan.Management.ValueString(), plan.Enabled.ValueBool(), plan.VlanID.ValueInt64(), plan.TrustedDhcpServerIPAddresses)
+	network, diags := networkModelToAPI(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -161,7 +160,7 @@ func (r *NetworkResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	network, diags := networkModelToAPI(ctx, plan.Name.ValueString(), plan.Management.ValueString(), plan.Enabled.ValueBool(), plan.VlanID.ValueInt64(), plan.TrustedDhcpServerIPAddresses)
+	network, diags := networkModelToAPI(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -194,11 +193,5 @@ func (r *NetworkResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 func (r *NetworkResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	siteID, resourceID, err := parseCompositeID(req.ID)
-	if err != nil {
-		resp.Diagnostics.AddError("Invalid import ID", err.Error())
-		return
-	}
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("site_id"), siteID)...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), resourceID)...)
+	importCompositeState(ctx, req, resp)
 }
