@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -85,7 +86,8 @@ func (e *APIError) Error() string {
 
 // IsNotFound returns true if the error is a 404 Not Found API error.
 func IsNotFound(err error) bool {
-	if apiErr, ok := err.(*APIError); ok {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
 		return apiErr.StatusCode == http.StatusNotFound
 	}
 	return false
@@ -157,7 +159,8 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 	return nil
 }
 
-// doList performs a paginated GET request, collecting all pages.
+// doList performs a paginated GET request with the maximum page size.
+// Note: currently fetches only the first page (up to 200 items).
 func (c *Client) doList(ctx context.Context, path string, result interface{}) error {
 	fullURL := c.buildURL(path)
 

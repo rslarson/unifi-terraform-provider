@@ -111,6 +111,44 @@ func wifiBroadcastAPIToModel(result *client.WifiBroadcast) (
 	return
 }
 
+// firewallZoneAPIToModel maps a client.FirewallZone response to Terraform model fields.
+func firewallZoneAPIToModel(ctx context.Context, result *client.FirewallZone) (name types.String, networkIDs types.List, diags diag.Diagnostics) {
+	name = types.StringValue(result.Name)
+	ids, d := types.ListValueFrom(ctx, types.StringType, result.NetworkIDs)
+	diags.Append(d...)
+	networkIDs = ids
+	return
+}
+
+// wifiBroadcastModelToAPI converts a WifiBroadcastResourceModel to a client.WifiBroadcast.
+func wifiBroadcastModelToAPI(plan WifiBroadcastResourceModel) *client.WifiBroadcast {
+	broadcast := &client.WifiBroadcast{
+		Type:                                plan.Type.ValueString(),
+		Name:                                plan.Name.ValueString(),
+		Enabled:                             plan.Enabled.ValueBool(),
+		ClientIsolationEnabled:              plan.ClientIsolationEnabled.ValueBool(),
+		HideName:                            plan.HideName.ValueBool(),
+		MulticastToUnicastConversionEnabled: plan.MulticastToUnicastConversionEnabled.ValueBool(),
+		UapsdEnabled:                        plan.UapsdEnabled.ValueBool(),
+		SecurityConfiguration: &client.SecurityConfiguration{
+			Type: plan.SecurityType.ValueString(),
+		},
+		Network: &client.BroadcastNetwork{
+			Type: plan.NetworkType.ValueString(),
+		},
+	}
+
+	if !plan.Passphrase.IsNull() && !plan.Passphrase.IsUnknown() {
+		broadcast.SecurityConfiguration.Passphrase = plan.Passphrase.ValueString()
+	}
+
+	if !plan.NetworkID.IsNull() && !plan.NetworkID.IsUnknown() {
+		broadcast.Network.NetworkID = plan.NetworkID.ValueString()
+	}
+
+	return broadcast
+}
+
 // firewallZoneModelToAPI converts Terraform model fields into a client.FirewallZone.
 func firewallZoneModelToAPI(ctx context.Context, name string, networkIDs types.List) (*client.FirewallZone, diag.Diagnostics) {
 	var diags diag.Diagnostics

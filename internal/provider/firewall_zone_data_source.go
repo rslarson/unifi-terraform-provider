@@ -5,6 +5,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/rslarson/terraform-provider-unifi/internal/client"
 )
@@ -76,10 +77,8 @@ func (d *FirewallZoneDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
-	config.Name = types.StringValue(result.Name)
-	ids, diags := types.ListValueFrom(ctx, types.StringType, result.NetworkIDs)
+	var diags diag.Diagnostics
+	config.Name, config.NetworkIDs, diags = firewallZoneAPIToModel(ctx, result)
 	resp.Diagnostics.Append(diags...)
-	config.NetworkIDs = ids
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, config)...)
 }

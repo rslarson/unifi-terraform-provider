@@ -151,7 +151,7 @@ func (r *WifiBroadcastResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	broadcast := r.modelToAPI(plan)
+	broadcast := wifiBroadcastModelToAPI(plan)
 
 	result, err := r.client.CreateWifiBroadcast(ctx, plan.SiteID.ValueString(), broadcast)
 	if err != nil {
@@ -203,7 +203,7 @@ func (r *WifiBroadcastResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	broadcast := r.modelToAPI(plan)
+	broadcast := wifiBroadcastModelToAPI(plan)
 
 	result, err := r.client.UpdateWifiBroadcast(ctx, plan.SiteID.ValueString(), state.ID.ValueString(), broadcast)
 	if err != nil {
@@ -240,32 +240,4 @@ func (r *WifiBroadcastResource) ImportState(ctx context.Context, req resource.Im
 	}
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("site_id"), siteID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), resourceID)...)
-}
-
-func (r *WifiBroadcastResource) modelToAPI(plan WifiBroadcastResourceModel) *client.WifiBroadcast {
-	broadcast := &client.WifiBroadcast{
-		Type:                                plan.Type.ValueString(),
-		Name:                                plan.Name.ValueString(),
-		Enabled:                             plan.Enabled.ValueBool(),
-		ClientIsolationEnabled:              plan.ClientIsolationEnabled.ValueBool(),
-		HideName:                            plan.HideName.ValueBool(),
-		MulticastToUnicastConversionEnabled: plan.MulticastToUnicastConversionEnabled.ValueBool(),
-		UapsdEnabled:                        plan.UapsdEnabled.ValueBool(),
-		SecurityConfiguration: &client.SecurityConfiguration{
-			Type: plan.SecurityType.ValueString(),
-		},
-		Network: &client.BroadcastNetwork{
-			Type: plan.NetworkType.ValueString(),
-		},
-	}
-
-	if !plan.Passphrase.IsNull() && !plan.Passphrase.IsUnknown() {
-		broadcast.SecurityConfiguration.Passphrase = plan.Passphrase.ValueString()
-	}
-
-	if !plan.NetworkID.IsNull() && !plan.NetworkID.IsUnknown() {
-		broadcast.Network.NetworkID = plan.NetworkID.ValueString()
-	}
-
-	return broadcast
 }

@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -95,10 +96,9 @@ func (r *FirewallZoneResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	plan.ID = types.StringValue(result.ID)
-	plan.Name = types.StringValue(result.Name)
-	ids, d := types.ListValueFrom(ctx, types.StringType, result.NetworkIDs)
+	var d diag.Diagnostics
+	plan.Name, plan.NetworkIDs, d = firewallZoneAPIToModel(ctx, result)
 	resp.Diagnostics.Append(d...)
-	plan.NetworkIDs = ids
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -119,11 +119,9 @@ func (r *FirewallZoneResource) Read(ctx context.Context, req resource.ReadReques
 		return
 	}
 
-	state.Name = types.StringValue(result.Name)
-	ids, diags := types.ListValueFrom(ctx, types.StringType, result.NetworkIDs)
+	var diags diag.Diagnostics
+	state.Name, state.NetworkIDs, diags = firewallZoneAPIToModel(ctx, result)
 	resp.Diagnostics.Append(diags...)
-	state.NetworkIDs = ids
-
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
@@ -153,10 +151,9 @@ func (r *FirewallZoneResource) Update(ctx context.Context, req resource.UpdateRe
 	}
 
 	plan.ID = state.ID
-	plan.Name = types.StringValue(result.Name)
-	ids, d := types.ListValueFrom(ctx, types.StringType, result.NetworkIDs)
+	var d diag.Diagnostics
+	plan.Name, plan.NetworkIDs, d = firewallZoneAPIToModel(ctx, result)
 	resp.Diagnostics.Append(d...)
-	plan.NetworkIDs = ids
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
