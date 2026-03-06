@@ -108,28 +108,10 @@ func (c *Client) buildURL(path string) string {
 		c.baseURL, apiVersion, c.hostID, apiVersion, path)
 }
 
-func (c *Client) do(ctx context.Context, method, path string, body interface{}, result interface{}) error {
-	fullURL := c.buildURL(path)
-
-	var bodyReader io.Reader
-	if body != nil {
-		jsonBody, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("marshaling request body: %w", err)
-		}
-		bodyReader = bytes.NewReader(jsonBody)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
-	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
-	}
-
+// executeRequest sends an HTTP request, handles error responses, and unmarshals the result.
+func (c *Client) executeRequest(req *http.Request, result interface{}) error {
 	req.Header.Set("X-API-Key", c.apiKey)
 	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -159,6 +141,30 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 	return nil
 }
 
+func (c *Client) do(ctx context.Context, method, path string, body interface{}, result interface{}) error {
+	fullURL := c.buildURL(path)
+
+	var bodyReader io.Reader
+	if body != nil {
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshaling request body: %w", err)
+		}
+		bodyReader = bytes.NewReader(jsonBody)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, bodyReader)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	return c.executeRequest(req, result)
+}
+
 // doList performs a paginated GET request with the maximum page size.
 // Note: currently fetches only the first page (up to 200 items).
 func (c *Client) doList(ctx context.Context, path string, result interface{}) error {
@@ -169,37 +175,11 @@ func (c *Client) doList(ctx context.Context, path string, result interface{}) er
 		return fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("X-API-Key", c.apiKey)
-	req.Header.Set("Accept", "application/json")
-
 	q := req.URL.Query()
 	q.Set("limit", defaultPageSize)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		var apiErr APIError
-		if err := json.Unmarshal(body, &apiErr); err != nil {
-			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-		}
-		return &apiErr
-	}
-
-	if err := json.Unmarshal(body, result); err != nil {
-		return fmt.Errorf("unmarshaling response: %w", err)
-	}
-
-	return nil
+	return c.executeRequest(req, result)
 }
 
 // --- Site operations ---
