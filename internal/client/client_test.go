@@ -54,13 +54,15 @@ func TestCreateNetwork(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(Network{
+		if err := json.NewEncoder(w).Encode(Network{
 			ID:         "net-123",
 			Name:       req.Name,
 			Management: req.Management,
 			Enabled:    req.Enabled,
 			VlanID:     req.VlanID,
-		})
+		}); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -91,13 +93,15 @@ func TestGetNetwork(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Network{
+		if err := json.NewEncoder(w).Encode(Network{
 			ID:         "net-456",
 			Name:       "My Network",
 			Management: "GATEWAY",
 			Enabled:    true,
 			VlanID:     200,
-		})
+		}); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -117,13 +121,15 @@ func TestAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(APIError{
+		if err := json.NewEncoder(w).Encode(APIError{
 			StatusCode: 404,
 			StatusName: "NOT_FOUND",
 			Code:       "api.resource.not-found",
 			Message:    "Network not found",
 			RequestID:  "req-789",
-		})
+		}); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -150,16 +156,20 @@ func TestAPIError(t *testing.T) {
 func TestCreateWifiBroadcast(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req WifiBroadcast
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(WifiBroadcast{
+		if err := json.NewEncoder(w).Encode(WifiBroadcast{
 			ID:      "wifi-123",
 			Type:    req.Type,
 			Name:    req.Name,
 			Enabled: req.Enabled,
-		})
+		}); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -189,15 +199,19 @@ func TestCreateWifiBroadcast(t *testing.T) {
 func TestCreateFirewallZone(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req FirewallZone
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(FirewallZone{
+		if err := json.NewEncoder(w).Encode(FirewallZone{
 			ID:         "zone-123",
 			Name:       req.Name,
 			NetworkIDs: req.NetworkIDs,
-		})
+		}); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -265,7 +279,7 @@ func TestListNetworks(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(PaginatedResponse[Network]{
+		if err := json.NewEncoder(w).Encode(PaginatedResponse[Network]{
 			Offset:     0,
 			Limit:      200,
 			Count:      2,
@@ -274,7 +288,9 @@ func TestListNetworks(t *testing.T) {
 				{ID: "net-1", Name: "Network 1", Management: ManagementUnmanaged, VlanID: 100},
 				{ID: "net-2", Name: "Network 2", Management: ManagementGateway, VlanID: 200},
 			},
-		})
+		}); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -293,7 +309,7 @@ func TestListNetworks(t *testing.T) {
 func TestListSites(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(PaginatedResponse[Site]{
+		if err := json.NewEncoder(w).Encode(PaginatedResponse[Site]{
 			Offset:     0,
 			Limit:      200,
 			Count:      1,
@@ -301,7 +317,9 @@ func TestListSites(t *testing.T) {
 			Data: []Site{
 				{ID: "site-1", Name: "Default", InternalReference: "default"},
 			},
-		})
+		}); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
