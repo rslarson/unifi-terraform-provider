@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -229,5 +230,107 @@ func TestDeleteNetwork(t *testing.T) {
 	err := c.DeleteNetwork(context.Background(), "site-1", "net-123")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	notFoundErr := &APIError{StatusCode: http.StatusNotFound, StatusName: "NOT_FOUND"}
+	if !IsNotFound(notFoundErr) {
+		t.Error("expected IsNotFound to return true for 404")
+	}
+
+	badRequestErr := &APIError{StatusCode: http.StatusBadRequest, StatusName: "BAD_REQUEST"}
+	if IsNotFound(badRequestErr) {
+		t.Error("expected IsNotFound to return false for 400")
+	}
+
+	if IsNotFound(nil) {
+		t.Error("expected IsNotFound to return false for nil")
+	}
+
+	genericErr := fmt.Errorf("some error")
+	if IsNotFound(genericErr) {
+		t.Error("expected IsNotFound to return false for non-APIError")
+	}
+}
+
+func TestListNetworks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Query().Get("limit") != defaultPageSize {
+			t.Errorf("expected limit=%s, got %q", defaultPageSize, r.URL.Query().Get("limit"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Network]{
+			Offset:     0,
+			Limit:      200,
+			Count:      2,
+			TotalCount: 2,
+			Data: []Network{
+				{ID: "net-1", Name: "Network 1", Management: ManagementUnmanaged, VlanID: 100},
+				{ID: "net-2", Name: "Network 2", Management: ManagementGateway, VlanID: 200},
+			},
+		})
+	}))
+	defer server.Close()
+
+	c := NewClient("test-key", "host-id")
+	c.baseURL = server.URL
+
+	networks, err := c.ListNetworks(context.Background(), "site-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(networks) != 2 {
+		t.Errorf("expected 2 networks, got %d", len(networks))
+	}
+}
+
+func TestListSites(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(PaginatedResponse[Site]{
+			Offset:     0,
+			Limit:      200,
+			Count:      1,
+			TotalCount: 1,
+			Data: []Site{
+				{ID: "site-1", Name: "Default", InternalReference: "default"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	c := NewClient("test-key", "host-id")
+	c.baseURL = server.URL
+
+	sites, err := c.ListSites(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sites) != 1 {
+		t.Errorf("expected 1 site, got %d", len(sites))
+	}
+	if sites[0].Name != "Default" {
+		t.Errorf("expected name 'Default', got %q", sites[0].Name)
+	}
+}
+
+func TestConstants(t *testing.T) {
+	// Verify constants match expected API values
+	if ManagementUnmanaged != "UNMANAGED" {
+		t.Errorf("unexpected value: %s", ManagementUnmanaged)
+	}
+	if BroadcastTypeStandard != "STANDARD" {
+		t.Errorf("unexpected value: %s", BroadcastTypeStandard)
+	}
+	if SecurityWPA2Personal != "WPA2_PERSONAL" {
+		t.Errorf("unexpected value: %s", SecurityWPA2Personal)
+	}
+	if NetworkTypeNative != "NATIVE" {
+		t.Errorf("unexpected value: %s", NetworkTypeNative)
 	}
 }

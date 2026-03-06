@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -96,16 +95,11 @@ func (d *WifiBroadcastDataSource) Schema(_ context.Context, _ datasource.SchemaR
 }
 
 func (d *WifiBroadcastDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
+	c, diags := extractClient(req.ProviderData, "Data Source")
+	resp.Diagnostics.Append(diags...)
+	if c != nil {
+		d.client = c
 	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T", req.ProviderData))
-		return
-	}
-	d.client = c
 }
 
 func (d *WifiBroadcastDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -121,25 +115,9 @@ func (d *WifiBroadcastDataSource) Read(ctx context.Context, req datasource.ReadR
 		return
 	}
 
-	config.Type = types.StringValue(result.Type)
-	config.Name = types.StringValue(result.Name)
-	config.Enabled = types.BoolValue(result.Enabled)
-	config.ClientIsolationEnabled = types.BoolValue(result.ClientIsolationEnabled)
-	config.HideName = types.BoolValue(result.HideName)
-	config.MulticastToUnicastConversionEnabled = types.BoolValue(result.MulticastToUnicastConversionEnabled)
-	config.UapsdEnabled = types.BoolValue(result.UapsdEnabled)
-
-	if result.SecurityConfiguration != nil {
-		config.SecurityType = types.StringValue(result.SecurityConfiguration.Type)
-	}
-	if result.Network != nil {
-		config.NetworkType = types.StringValue(result.Network.Type)
-		if result.Network.NetworkID != "" {
-			config.NetworkID = types.StringValue(result.Network.NetworkID)
-		} else {
-			config.NetworkID = types.StringNull()
-		}
-	}
+	config.Type, config.Name, config.Enabled, config.ClientIsolationEnabled, config.HideName,
+		config.MulticastToUnicastConversionEnabled, config.UapsdEnabled,
+		config.SecurityType, config.NetworkType, config.NetworkID = wifiBroadcastAPIToModel(result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, config)...)
 }

@@ -7,13 +7,43 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"time"
 )
 
 const (
-	defaultBaseURL = "https://api.ui.com"
-	apiVersion     = "v1"
+	defaultBaseURL  = "https://api.ui.com"
+	apiVersion      = "v1"
+	defaultPageSize = "200"
+)
+
+// Management types for networks.
+const (
+	ManagementUnmanaged = "UNMANAGED"
+	ManagementGateway   = "GATEWAY"
+	ManagementSwitch    = "SWITCH"
+)
+
+// WiFi broadcast types.
+const (
+	BroadcastTypeStandard     = "STANDARD"
+	BroadcastTypeIoTOptimized = "IOT_OPTIMIZED"
+)
+
+// WiFi security types.
+const (
+	SecurityOpen               = "OPEN"
+	SecurityWPA2Personal       = "WPA2_PERSONAL"
+	SecurityWPA3Personal       = "WPA3_PERSONAL"
+	SecurityWPA2WPA3Personal   = "WPA2_WPA3_PERSONAL"
+	SecurityWPA2Enterprise     = "WPA2_ENTERPRISE"
+	SecurityWPA3Enterprise     = "WPA3_ENTERPRISE"
+	SecurityWPA2WPA3Enterprise = "WPA2_WPA3_ENTERPRISE"
+)
+
+// Network assignment types for WiFi broadcasts.
+const (
+	NetworkTypeNative   = "NATIVE"
+	NetworkTypeSpecific = "SPECIFIC"
 )
 
 // Client manages communication with the UniFi Network API.
@@ -51,6 +81,14 @@ type APIError struct {
 func (e *APIError) Error() string {
 	return fmt.Sprintf("UniFi API error %d (%s): %s [code=%s, requestId=%s]",
 		e.StatusCode, e.StatusName, e.Message, e.Code, e.RequestID)
+}
+
+// IsNotFound returns true if the error is a 404 Not Found API error.
+func IsNotFound(err error) bool {
+	if apiErr, ok := err.(*APIError); ok {
+		return apiErr.StatusCode == http.StatusNotFound
+	}
+	return false
 }
 
 // PaginatedResponse wraps paginated list responses.
@@ -119,6 +157,48 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 	return nil
 }
 
+// doList performs a paginated GET request, collecting all pages.
+func (c *Client) doList(ctx context.Context, path string, result interface{}) error {
+	fullURL := c.buildURL(path)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("X-API-Key", c.apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	q := req.URL.Query()
+	q.Set("limit", defaultPageSize)
+	req.URL.RawQuery = q.Encode()
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("executing request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		var apiErr APIError
+		if err := json.Unmarshal(body, &apiErr); err != nil {
+			return fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		}
+		return &apiErr
+	}
+
+	if err := json.Unmarshal(body, result); err != nil {
+		return fmt.Errorf("unmarshaling response: %w", err)
+	}
+
+	return nil
+}
+
 // --- Site operations ---
 
 type Site struct {
@@ -129,57 +209,22 @@ type Site struct {
 
 func (c *Client) ListSites(ctx context.Context) ([]Site, error) {
 	var resp PaginatedResponse[Site]
-	// Use direct API path for sites (not site-scoped)
-	siteURL := fmt.Sprintf("%s/%s/connector/consoles/%s/%s/sites",
-		c.baseURL, apiVersion, c.hostID, apiVersion)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, siteURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+	if err := c.doList(ctx, "sites", &resp); err != nil {
+		return nil, err
 	}
-	req.Header.Set("X-API-Key", c.apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	q := req.URL.Query()
-	q.Set("limit", "200")
-	req.URL.RawQuery = q.Encode()
-
-	httpResp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing request: %w", err)
-	}
-	defer httpResp.Body.Close()
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
-	}
-
-	if httpResp.StatusCode >= 400 {
-		var apiErr APIError
-		if err := json.Unmarshal(body, &apiErr); err != nil {
-			return nil, fmt.Errorf("API error (status %d): %s", httpResp.StatusCode, string(body))
-		}
-		return nil, &apiErr
-	}
-
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, fmt.Errorf("unmarshaling response: %w", err)
-	}
-
 	return resp.Data, nil
 }
 
 // --- Network operations ---
 
 type Network struct {
-	ID           string            `json:"id,omitempty"`
-	Name         string            `json:"name"`
-	Management   string            `json:"management"`
-	Enabled      bool              `json:"enabled"`
-	VlanID       int               `json:"vlanId"`
-	Metadata     *EntityMetadata   `json:"metadata,omitempty"`
-	DhcpGuarding *DhcpGuarding     `json:"dhcpGuarding,omitempty"`
+	ID           string          `json:"id,omitempty"`
+	Name         string          `json:"name"`
+	Management   string          `json:"management"`
+	Enabled      bool            `json:"enabled"`
+	VlanID       int             `json:"vlanId"`
+	Metadata     *EntityMetadata `json:"metadata,omitempty"`
+	DhcpGuarding *DhcpGuarding   `json:"dhcpGuarding,omitempty"`
 }
 
 type EntityMetadata struct {
@@ -226,61 +271,28 @@ func (c *Client) DeleteNetwork(ctx context.Context, siteID, networkID string) er
 }
 
 func (c *Client) ListNetworks(ctx context.Context, siteID string) ([]Network, error) {
+	var resp PaginatedResponse[Network]
 	path := fmt.Sprintf("sites/%s/networks", siteID)
-	fullURL := c.buildURL(path)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+	if err := c.doList(ctx, path, &resp); err != nil {
+		return nil, err
 	}
-	req.Header.Set("X-API-Key", c.apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	q := req.URL.Query()
-	q.Set("limit", "200")
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		var apiErr APIError
-		if err := json.Unmarshal(body, &apiErr); err != nil {
-			return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-		}
-		return nil, &apiErr
-	}
-
-	var result PaginatedResponse[Network]
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("unmarshaling response: %w", err)
-	}
-
-	return result.Data, nil
+	return resp.Data, nil
 }
 
 // --- WiFi Broadcast operations ---
 
 type WifiBroadcast struct {
-	ID                                   string                    `json:"id,omitempty"`
-	Type                                 string                    `json:"type"`
-	Name                                 string                    `json:"name"`
-	Enabled                              bool                      `json:"enabled"`
-	SecurityConfiguration                *SecurityConfiguration    `json:"securityConfiguration"`
-	Network                              *BroadcastNetwork         `json:"network"`
-	ClientIsolationEnabled               bool                      `json:"clientIsolationEnabled"`
-	HideName                             bool                      `json:"hideName"`
-	MulticastToUnicastConversionEnabled  bool                      `json:"multicastToUnicastConversionEnabled"`
-	UapsdEnabled                         bool                      `json:"uapsdEnabled"`
-	Metadata                             *EntityMetadata           `json:"metadata,omitempty"`
+	ID                                  string                 `json:"id,omitempty"`
+	Type                                string                 `json:"type"`
+	Name                                string                 `json:"name"`
+	Enabled                             bool                   `json:"enabled"`
+	SecurityConfiguration               *SecurityConfiguration `json:"securityConfiguration"`
+	Network                             *BroadcastNetwork      `json:"network"`
+	ClientIsolationEnabled              bool                   `json:"clientIsolationEnabled"`
+	HideName                            bool                   `json:"hideName"`
+	MulticastToUnicastConversionEnabled bool                   `json:"multicastToUnicastConversionEnabled"`
+	UapsdEnabled                        bool                   `json:"uapsdEnabled"`
+	Metadata                            *EntityMetadata        `json:"metadata,omitempty"`
 }
 
 type SecurityConfiguration struct {
@@ -375,20 +387,20 @@ func (c *Client) DeleteFirewallZone(ctx context.Context, siteID, zoneID string) 
 // --- Device operations ---
 
 type Device struct {
-	ID              string          `json:"id"`
-	MacAddress      string          `json:"macAddress"`
-	IPAddress       string          `json:"ipAddress"`
-	Name            string          `json:"name"`
-	Model           string          `json:"model"`
-	Supported       bool            `json:"supported"`
-	State           string          `json:"state"`
-	FirmwareVersion string          `json:"firmwareVersion"`
-	FirmwareUpdatable bool          `json:"firmwareUpdatable"`
-	AdoptedAt       string          `json:"adoptedAt"`
-	ProvisionedAt   string          `json:"provisionedAt"`
-	ConfigurationID string          `json:"configurationId"`
-	Uplink          *DeviceUplink   `json:"uplink,omitempty"`
-	Features        *DeviceFeatures `json:"features,omitempty"`
+	ID                string          `json:"id"`
+	MacAddress        string          `json:"macAddress"`
+	IPAddress         string          `json:"ipAddress"`
+	Name              string          `json:"name"`
+	Model             string          `json:"model"`
+	Supported         bool            `json:"supported"`
+	State             string          `json:"state"`
+	FirmwareVersion   string          `json:"firmwareVersion"`
+	FirmwareUpdatable bool            `json:"firmwareUpdatable"`
+	AdoptedAt         string          `json:"adoptedAt"`
+	ProvisionedAt     string          `json:"provisionedAt"`
+	ConfigurationID   string          `json:"configurationId"`
+	Uplink            *DeviceUplink   `json:"uplink,omitempty"`
+	Features          *DeviceFeatures `json:"features,omitempty"`
 }
 
 type DeviceUplink struct {
@@ -411,43 +423,10 @@ func (c *Client) GetDevice(ctx context.Context, siteID, deviceID string) (*Devic
 }
 
 func (c *Client) ListDevices(ctx context.Context, siteID string) ([]Device, error) {
+	var resp PaginatedResponse[Device]
 	path := fmt.Sprintf("sites/%s/devices", siteID)
-	fullURL := c.buildURL(path)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fullURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
+	if err := c.doList(ctx, path, &resp); err != nil {
+		return nil, err
 	}
-	req.Header.Set("X-API-Key", c.apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	q := url.Values{}
-	q.Set("limit", "200")
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		var apiErr APIError
-		if err := json.Unmarshal(body, &apiErr); err != nil {
-			return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
-		}
-		return nil, &apiErr
-	}
-
-	var result PaginatedResponse[Device]
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("unmarshaling response: %w", err)
-	}
-
-	return result.Data, nil
+	return resp.Data, nil
 }

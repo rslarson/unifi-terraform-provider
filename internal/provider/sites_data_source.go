@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -63,16 +62,11 @@ func (d *SitesDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, 
 }
 
 func (d *SitesDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
+	c, diags := extractClient(req.ProviderData, "Data Source")
+	resp.Diagnostics.Append(diags...)
+	if c != nil {
+		d.client = c
 	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T", req.ProviderData))
-		return
-	}
-	d.client = c
 }
 
 func (d *SitesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -82,7 +76,9 @@ func (d *SitesDataSource) Read(ctx context.Context, req datasource.ReadRequest, 
 		return
 	}
 
-	var state SitesDataSourceModel
+	state := SitesDataSourceModel{
+		Sites: make([]SiteModel, 0, len(sites)),
+	}
 	for _, s := range sites {
 		state.Sites = append(state.Sites, SiteModel{
 			ID:                types.StringValue(s.ID),

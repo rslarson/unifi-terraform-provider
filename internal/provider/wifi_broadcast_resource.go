@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -71,7 +70,7 @@ func (r *WifiBroadcastResource) Schema(_ context.Context, _ resource.SchemaReque
 				Description: "Broadcast type: STANDARD or IOT_OPTIMIZED.",
 				Required:    true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("STANDARD", "IOT_OPTIMIZED"),
+					stringvalidator.OneOf(client.BroadcastTypeStandard, client.BroadcastTypeIoTOptimized),
 				},
 			},
 			"name": schema.StringAttribute{
@@ -87,8 +86,9 @@ func (r *WifiBroadcastResource) Schema(_ context.Context, _ resource.SchemaReque
 				Required:    true,
 				Validators: []validator.String{
 					stringvalidator.OneOf(
-						"OPEN", "WPA2_PERSONAL", "WPA3_PERSONAL", "WPA2_WPA3_PERSONAL",
-						"WPA2_ENTERPRISE", "WPA3_ENTERPRISE", "WPA2_WPA3_ENTERPRISE",
+						client.SecurityOpen, client.SecurityWPA2Personal, client.SecurityWPA3Personal,
+						client.SecurityWPA2WPA3Personal, client.SecurityWPA2Enterprise,
+						client.SecurityWPA3Enterprise, client.SecurityWPA2WPA3Enterprise,
 					),
 				},
 			},
@@ -101,7 +101,7 @@ func (r *WifiBroadcastResource) Schema(_ context.Context, _ resource.SchemaReque
 				Description: "Network assignment type: NATIVE or SPECIFIC.",
 				Required:    true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("NATIVE", "SPECIFIC"),
+					stringvalidator.OneOf(client.NetworkTypeNative, client.NetworkTypeSpecific),
 				},
 			},
 			"network_id": schema.StringAttribute{
@@ -137,16 +137,11 @@ func (r *WifiBroadcastResource) Schema(_ context.Context, _ resource.SchemaReque
 }
 
 func (r *WifiBroadcastResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
+	c, diags := extractClient(req.ProviderData, "Resource")
+	resp.Diagnostics.Append(diags...)
+	if c != nil {
+		r.client = c
 	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T", req.ProviderData))
-		return
-	}
-	r.client = c
 }
 
 func (r *WifiBroadcastResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -165,6 +160,9 @@ func (r *WifiBroadcastResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	plan.ID = types.StringValue(result.ID)
+	plan.Type, plan.Name, plan.Enabled, plan.ClientIsolationEnabled, plan.HideName,
+		plan.MulticastToUnicastConversionEnabled, plan.UapsdEnabled,
+		plan.SecurityType, plan.NetworkType, plan.NetworkID = wifiBroadcastAPIToModel(result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -177,7 +175,7 @@ func (r *WifiBroadcastResource) Read(ctx context.Context, req resource.ReadReque
 
 	result, err := r.client.GetWifiBroadcast(ctx, state.SiteID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.StatusCode == 404 {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -185,23 +183,9 @@ func (r *WifiBroadcastResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	state.Type = types.StringValue(result.Type)
-	state.Name = types.StringValue(result.Name)
-	state.Enabled = types.BoolValue(result.Enabled)
-	state.ClientIsolationEnabled = types.BoolValue(result.ClientIsolationEnabled)
-	state.HideName = types.BoolValue(result.HideName)
-	state.MulticastToUnicastConversionEnabled = types.BoolValue(result.MulticastToUnicastConversionEnabled)
-	state.UapsdEnabled = types.BoolValue(result.UapsdEnabled)
-
-	if result.SecurityConfiguration != nil {
-		state.SecurityType = types.StringValue(result.SecurityConfiguration.Type)
-	}
-	if result.Network != nil {
-		state.NetworkType = types.StringValue(result.Network.Type)
-		if result.Network.NetworkID != "" {
-			state.NetworkID = types.StringValue(result.Network.NetworkID)
-		}
-	}
+	state.Type, state.Name, state.Enabled, state.ClientIsolationEnabled, state.HideName,
+		state.MulticastToUnicastConversionEnabled, state.UapsdEnabled,
+		state.SecurityType, state.NetworkType, state.NetworkID = wifiBroadcastAPIToModel(result)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
@@ -221,13 +205,16 @@ func (r *WifiBroadcastResource) Update(ctx context.Context, req resource.UpdateR
 
 	broadcast := r.modelToAPI(plan)
 
-	_, err := r.client.UpdateWifiBroadcast(ctx, plan.SiteID.ValueString(), state.ID.ValueString(), broadcast)
+	result, err := r.client.UpdateWifiBroadcast(ctx, plan.SiteID.ValueString(), state.ID.ValueString(), broadcast)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating WiFi broadcast", err.Error())
 		return
 	}
 
 	plan.ID = state.ID
+	plan.Type, plan.Name, plan.Enabled, plan.ClientIsolationEnabled, plan.HideName,
+		plan.MulticastToUnicastConversionEnabled, plan.UapsdEnabled,
+		plan.SecurityType, plan.NetworkType, plan.NetworkID = wifiBroadcastAPIToModel(result)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -246,7 +233,13 @@ func (r *WifiBroadcastResource) Delete(ctx context.Context, req resource.DeleteR
 }
 
 func (r *WifiBroadcastResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	siteID, resourceID, err := parseCompositeID(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid import ID", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("site_id"), siteID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), resourceID)...)
 }
 
 func (r *WifiBroadcastResource) modelToAPI(plan WifiBroadcastResourceModel) *client.WifiBroadcast {

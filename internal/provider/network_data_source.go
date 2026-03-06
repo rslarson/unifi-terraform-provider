@@ -2,10 +2,10 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/rslarson/terraform-provider-unifi/internal/client"
 )
@@ -72,16 +72,11 @@ func (d *NetworkDataSource) Schema(_ context.Context, _ datasource.SchemaRequest
 }
 
 func (d *NetworkDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
+	c, diags := extractClient(req.ProviderData, "Data Source")
+	resp.Diagnostics.Append(diags...)
+	if c != nil {
+		d.client = c
 	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T", req.ProviderData))
-		return
-	}
-	d.client = c
 }
 
 func (d *NetworkDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
@@ -97,18 +92,8 @@ func (d *NetworkDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	config.Name = types.StringValue(result.Name)
-	config.Management = types.StringValue(result.Management)
-	config.Enabled = types.BoolValue(result.Enabled)
-	config.VlanID = types.Int64Value(int64(result.VlanID))
-
-	if result.DhcpGuarding != nil && len(result.DhcpGuarding.TrustedDhcpServerIPAddresses) > 0 {
-		ips, diags := types.ListValueFrom(ctx, types.StringType, result.DhcpGuarding.TrustedDhcpServerIPAddresses)
-		resp.Diagnostics.Append(diags...)
-		config.TrustedDhcpServerIPAddresses = ips
-	} else {
-		config.TrustedDhcpServerIPAddresses = types.ListNull(types.StringType)
-	}
-
+	var diags diag.Diagnostics
+	config.Name, config.Management, config.Enabled, config.VlanID, config.TrustedDhcpServerIPAddresses, diags = networkAPIToModel(ctx, result)
+	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, config)...)
 }

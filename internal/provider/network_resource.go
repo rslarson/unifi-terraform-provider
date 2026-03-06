@@ -2,10 +2,10 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -69,7 +69,7 @@ func (r *NetworkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				Description: "Management type: UNMANAGED, GATEWAY, or SWITCH.",
 				Required:    true,
 				Validators: []validator.String{
-					stringvalidator.OneOf("UNMANAGED", "GATEWAY", "SWITCH"),
+					stringvalidator.OneOf(client.ManagementUnmanaged, client.ManagementGateway, client.ManagementSwitch),
 				},
 			},
 			"enabled": schema.BoolAttribute{
@@ -93,16 +93,11 @@ func (r *NetworkResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 }
 
 func (r *NetworkResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
+	c, diags := extractClient(req.ProviderData, "Resource")
+	resp.Diagnostics.Append(diags...)
+	if c != nil {
+		r.client = c
 	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T", req.ProviderData))
-		return
-	}
-	r.client = c
 }
 
 func (r *NetworkResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -112,22 +107,10 @@ func (r *NetworkResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	network := &client.Network{
-		Name:       plan.Name.ValueString(),
-		Management: plan.Management.ValueString(),
-		Enabled:    plan.Enabled.ValueBool(),
-		VlanID:     int(plan.VlanID.ValueInt64()),
-	}
-
-	if !plan.TrustedDhcpServerIPAddresses.IsNull() {
-		var ips []string
-		resp.Diagnostics.Append(plan.TrustedDhcpServerIPAddresses.ElementsAs(ctx, &ips, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		network.DhcpGuarding = &client.DhcpGuarding{
-			TrustedDhcpServerIPAddresses: ips,
-		}
+	network, diags := networkModelToAPI(ctx, plan.Name.ValueString(), plan.Management.ValueString(), plan.Enabled.ValueBool(), plan.VlanID.ValueInt64(), plan.TrustedDhcpServerIPAddresses)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	result, err := r.client.CreateNetwork(ctx, plan.SiteID.ValueString(), network)
@@ -137,6 +120,8 @@ func (r *NetworkResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	plan.ID = types.StringValue(result.ID)
+	plan.Name, plan.Management, plan.Enabled, plan.VlanID, plan.TrustedDhcpServerIPAddresses, diags = networkAPIToModel(ctx, result)
+	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -149,7 +134,7 @@ func (r *NetworkResource) Read(ctx context.Context, req resource.ReadRequest, re
 
 	result, err := r.client.GetNetwork(ctx, state.SiteID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.StatusCode == 404 {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -157,19 +142,9 @@ func (r *NetworkResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	state.Name = types.StringValue(result.Name)
-	state.Management = types.StringValue(result.Management)
-	state.Enabled = types.BoolValue(result.Enabled)
-	state.VlanID = types.Int64Value(int64(result.VlanID))
-
-	if result.DhcpGuarding != nil && len(result.DhcpGuarding.TrustedDhcpServerIPAddresses) > 0 {
-		ips, diags := types.ListValueFrom(ctx, types.StringType, result.DhcpGuarding.TrustedDhcpServerIPAddresses)
-		resp.Diagnostics.Append(diags...)
-		state.TrustedDhcpServerIPAddresses = ips
-	} else {
-		state.TrustedDhcpServerIPAddresses = types.ListNull(types.StringType)
-	}
-
+	var diags diag.Diagnostics
+	state.Name, state.Management, state.Enabled, state.VlanID, state.TrustedDhcpServerIPAddresses, diags = networkAPIToModel(ctx, result)
+	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
 
@@ -186,31 +161,21 @@ func (r *NetworkResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	network := &client.Network{
-		Name:       plan.Name.ValueString(),
-		Management: plan.Management.ValueString(),
-		Enabled:    plan.Enabled.ValueBool(),
-		VlanID:     int(plan.VlanID.ValueInt64()),
+	network, diags := networkModelToAPI(ctx, plan.Name.ValueString(), plan.Management.ValueString(), plan.Enabled.ValueBool(), plan.VlanID.ValueInt64(), plan.TrustedDhcpServerIPAddresses)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	if !plan.TrustedDhcpServerIPAddresses.IsNull() {
-		var ips []string
-		resp.Diagnostics.Append(plan.TrustedDhcpServerIPAddresses.ElementsAs(ctx, &ips, false)...)
-		if resp.Diagnostics.HasError() {
-			return
-		}
-		network.DhcpGuarding = &client.DhcpGuarding{
-			TrustedDhcpServerIPAddresses: ips,
-		}
-	}
-
-	_, err := r.client.UpdateNetwork(ctx, plan.SiteID.ValueString(), state.ID.ValueString(), network)
+	result, err := r.client.UpdateNetwork(ctx, plan.SiteID.ValueString(), state.ID.ValueString(), network)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating network", err.Error())
 		return
 	}
 
 	plan.ID = state.ID
+	plan.Name, plan.Management, plan.Enabled, plan.VlanID, plan.TrustedDhcpServerIPAddresses, diags = networkAPIToModel(ctx, result)
+	resp.Diagnostics.Append(diags...)
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -229,5 +194,11 @@ func (r *NetworkResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 func (r *NetworkResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	siteID, resourceID, err := parseCompositeID(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid import ID", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("site_id"), siteID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), resourceID)...)
 }

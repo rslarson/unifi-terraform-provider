@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -17,20 +16,20 @@ type DeviceDataSource struct {
 }
 
 type DeviceDataSourceModel struct {
-	ID              types.String `tfsdk:"id"`
-	SiteID          types.String `tfsdk:"site_id"`
-	MacAddress      types.String `tfsdk:"mac_address"`
-	IPAddress       types.String `tfsdk:"ip_address"`
-	Name            types.String `tfsdk:"name"`
-	Model           types.String `tfsdk:"model"`
-	Supported       types.Bool   `tfsdk:"supported"`
-	State           types.String `tfsdk:"state"`
-	FirmwareVersion types.String `tfsdk:"firmware_version"`
-	FirmwareUpdatable types.Bool `tfsdk:"firmware_updatable"`
-	AdoptedAt       types.String `tfsdk:"adopted_at"`
-	ProvisionedAt   types.String `tfsdk:"provisioned_at"`
-	ConfigurationID types.String `tfsdk:"configuration_id"`
-	UplinkDeviceID  types.String `tfsdk:"uplink_device_id"`
+	ID                types.String `tfsdk:"id"`
+	SiteID            types.String `tfsdk:"site_id"`
+	MacAddress        types.String `tfsdk:"mac_address"`
+	IPAddress         types.String `tfsdk:"ip_address"`
+	Name              types.String `tfsdk:"name"`
+	Model             types.String `tfsdk:"model"`
+	Supported         types.Bool   `tfsdk:"supported"`
+	State             types.String `tfsdk:"state"`
+	FirmwareVersion   types.String `tfsdk:"firmware_version"`
+	FirmwareUpdatable types.Bool   `tfsdk:"firmware_updatable"`
+	AdoptedAt         types.String `tfsdk:"adopted_at"`
+	ProvisionedAt     types.String `tfsdk:"provisioned_at"`
+	ConfigurationID   types.String `tfsdk:"configuration_id"`
+	UplinkDeviceID    types.String `tfsdk:"uplink_device_id"`
 }
 
 func NewDeviceDataSource() datasource.DataSource {
@@ -106,16 +105,11 @@ func (d *DeviceDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 }
 
 func (d *DeviceDataSource) Configure(_ context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
+	c, diags := extractClient(req.ProviderData, "Data Source")
+	resp.Diagnostics.Append(diags...)
+	if c != nil {
+		d.client = c
 	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T", req.ProviderData))
-		return
-	}
-	d.client = c
 }
 
 func (d *DeviceDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

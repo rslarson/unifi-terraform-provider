@@ -2,7 +2,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -69,16 +68,11 @@ func (r *FirewallZoneResource) Schema(_ context.Context, _ resource.SchemaReques
 }
 
 func (r *FirewallZoneResource) Configure(_ context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
+	c, diags := extractClient(req.ProviderData, "Resource")
+	resp.Diagnostics.Append(diags...)
+	if c != nil {
+		r.client = c
 	}
-	c, ok := req.ProviderData.(*client.Client)
-	if !ok {
-		resp.Diagnostics.AddError("Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.Client, got: %T", req.ProviderData))
-		return
-	}
-	r.client = c
 }
 
 func (r *FirewallZoneResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -88,15 +82,10 @@ func (r *FirewallZoneResource) Create(ctx context.Context, req resource.CreateRe
 		return
 	}
 
-	var networkIDs []string
-	resp.Diagnostics.Append(plan.NetworkIDs.ElementsAs(ctx, &networkIDs, false)...)
+	zone, diags := firewallZoneModelToAPI(ctx, plan.Name.ValueString(), plan.NetworkIDs)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
-	}
-
-	zone := &client.FirewallZone{
-		Name:       plan.Name.ValueString(),
-		NetworkIDs: networkIDs,
 	}
 
 	result, err := r.client.CreateFirewallZone(ctx, plan.SiteID.ValueString(), zone)
@@ -106,6 +95,10 @@ func (r *FirewallZoneResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	plan.ID = types.StringValue(result.ID)
+	plan.Name = types.StringValue(result.Name)
+	ids, d := types.ListValueFrom(ctx, types.StringType, result.NetworkIDs)
+	resp.Diagnostics.Append(d...)
+	plan.NetworkIDs = ids
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -118,7 +111,7 @@ func (r *FirewallZoneResource) Read(ctx context.Context, req resource.ReadReques
 
 	result, err := r.client.GetFirewallZone(ctx, state.SiteID.ValueString(), state.ID.ValueString())
 	if err != nil {
-		if apiErr, ok := err.(*client.APIError); ok && apiErr.StatusCode == 404 {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -147,24 +140,23 @@ func (r *FirewallZoneResource) Update(ctx context.Context, req resource.UpdateRe
 		return
 	}
 
-	var networkIDs []string
-	resp.Diagnostics.Append(plan.NetworkIDs.ElementsAs(ctx, &networkIDs, false)...)
+	zone, diags := firewallZoneModelToAPI(ctx, plan.Name.ValueString(), plan.NetworkIDs)
+	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	zone := &client.FirewallZone{
-		Name:       plan.Name.ValueString(),
-		NetworkIDs: networkIDs,
-	}
-
-	_, err := r.client.UpdateFirewallZone(ctx, plan.SiteID.ValueString(), state.ID.ValueString(), zone)
+	result, err := r.client.UpdateFirewallZone(ctx, plan.SiteID.ValueString(), state.ID.ValueString(), zone)
 	if err != nil {
 		resp.Diagnostics.AddError("Error updating firewall zone", err.Error())
 		return
 	}
 
 	plan.ID = state.ID
+	plan.Name = types.StringValue(result.Name)
+	ids, d := types.ListValueFrom(ctx, types.StringType, result.NetworkIDs)
+	resp.Diagnostics.Append(d...)
+	plan.NetworkIDs = ids
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
 
@@ -183,5 +175,11 @@ func (r *FirewallZoneResource) Delete(ctx context.Context, req resource.DeleteRe
 }
 
 func (r *FirewallZoneResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	siteID, resourceID, err := parseCompositeID(req.ID)
+	if err != nil {
+		resp.Diagnostics.AddError("Invalid import ID", err.Error())
+		return
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("site_id"), siteID)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("id"), resourceID)...)
 }
