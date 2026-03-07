@@ -77,6 +77,11 @@ func NewClient(apiKey, hostID string) *Client {
 	}
 }
 
+// SetBaseURL overrides the default API base URL. This is intended for testing.
+func (c *Client) SetBaseURL(url string) {
+	c.baseURL = url
+}
+
 // APIError represents an error response from the UniFi API.
 type APIError struct {
 	StatusCode  int    `json:"statusCode"`
