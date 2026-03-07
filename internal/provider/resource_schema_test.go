@@ -11,13 +11,7 @@ import (
 )
 
 func TestNetworkResourceSchema(t *testing.T) {
-	r := NewNetworkResource()
-	resp := &resource.SchemaResponse{}
-	r.Schema(context.Background(), resource.SchemaRequest{}, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected errors: %v", resp.Diagnostics)
-	}
+	resp := resourceSchemaFor(t, NewNetworkResource())
 
 	requiredAttrs := []string{"site_id", "name", "management", "enabled", "vlan_id"}
 	for _, attr := range requiredAttrs {
@@ -51,13 +45,7 @@ func TestNetworkResourceMetadata(t *testing.T) {
 }
 
 func TestWifiBroadcastResourceSchema(t *testing.T) {
-	r := NewWifiBroadcastResource()
-	resp := &resource.SchemaResponse{}
-	r.Schema(context.Background(), resource.SchemaRequest{}, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected errors: %v", resp.Diagnostics)
-	}
+	resp := resourceSchemaFor(t, NewWifiBroadcastResource())
 
 	requiredAttrs := []string{"site_id", "type", "name", "enabled", "security_type", "network_type"}
 	for _, attr := range requiredAttrs {
@@ -115,25 +103,20 @@ func TestWifiBroadcastResourceMetadata(t *testing.T) {
 func wifiBroadcastConfig(t *testing.T, attrs map[string]tftypes.Value) tfsdk.Config {
 	t.Helper()
 
-	r := NewWifiBroadcastResource()
-	schemaResp := &resource.SchemaResponse{}
-	r.Schema(context.Background(), resource.SchemaRequest{}, schemaResp)
-	if schemaResp.Diagnostics.HasError() {
-		t.Fatalf("unexpected schema errors: %v", schemaResp.Diagnostics)
-	}
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 
 	// Build default values for all attributes.
 	defaults := map[string]tftypes.Value{
 		"id":            tftypes.NewValue(tftypes.String, nil),
 		"site_id":       tftypes.NewValue(tftypes.String, "site-1"),
-		"type":          tftypes.NewValue(tftypes.String, "STANDARD"),
+		"type":          tftypes.NewValue(tftypes.String, client.BroadcastTypeStandard),
 		"name":          tftypes.NewValue(tftypes.String, "Test WiFi"),
 		"enabled":       tftypes.NewValue(tftypes.Bool, true),
 		"security_type": tftypes.NewValue(tftypes.String, nil),
 		"passphrase":    tftypes.NewValue(tftypes.String, nil),
 		"passphrase_wo": tftypes.NewValue(tftypes.String, nil),
 		"passphrase_wo_version":                    tftypes.NewValue(tftypes.Number, nil),
-		"network_type":                             tftypes.NewValue(tftypes.String, "NATIVE"),
+		"network_type":                             tftypes.NewValue(tftypes.String, client.NetworkTypeNative),
 		"network_id":                               tftypes.NewValue(tftypes.String, nil),
 		"client_isolation_enabled":                 tftypes.NewValue(tftypes.Bool, nil),
 		"hide_name":                                tftypes.NewValue(tftypes.Bool, nil),
@@ -288,13 +271,7 @@ func TestWifiBroadcastValidateConfig(t *testing.T) {
 }
 
 func TestFirewallZoneResourceSchema(t *testing.T) {
-	r := NewFirewallZoneResource()
-	resp := &resource.SchemaResponse{}
-	r.Schema(context.Background(), resource.SchemaRequest{}, resp)
-
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected errors: %v", resp.Diagnostics)
-	}
+	resp := resourceSchemaFor(t, NewFirewallZoneResource())
 
 	requiredAttrs := []string{"site_id", "name", "network_ids"}
 	for _, attr := range requiredAttrs {

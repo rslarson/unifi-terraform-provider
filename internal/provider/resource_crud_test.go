@@ -16,52 +16,50 @@ import (
 
 // --- Test helpers ---
 
-// networkTFValue builds a tftypes.Value for a network resource model.
-// id can be a string or nil (for computed/unknown).
-func networkTFValue(t *testing.T, id interface{}, siteID, name, management string, enabled bool, vlanID int, dhcpIPs interface{}) tftypes.Value {
+// networkTFValue builds a tftypes.Value for a network resource/data source model.
+// Pass nil or a map of overrides to customize specific attributes.
+func networkTFValue(t *testing.T, attrs map[string]tftypes.Value) tftypes.Value {
 	t.Helper()
 
-	var dhcpVal tftypes.Value
-	if dhcpIPs == nil {
-		dhcpVal = tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil)
-	} else {
-		ips := dhcpIPs.([]string)
-		vals := make([]tftypes.Value, len(ips))
-		for i, ip := range ips {
-			vals[i] = tftypes.NewValue(tftypes.String, ip)
-		}
-		dhcpVal = tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, vals)
+	defaults := map[string]tftypes.Value{
+		"id":                               tftypes.NewValue(tftypes.String, nil),
+		"site_id":                          tftypes.NewValue(tftypes.String, "site-1"),
+		"name":                             tftypes.NewValue(tftypes.String, "Test Net"),
+		"management":                       tftypes.NewValue(tftypes.String, client.ManagementUnmanaged),
+		"enabled":                          tftypes.NewValue(tftypes.Bool, true),
+		"vlan_id":                          tftypes.NewValue(tftypes.Number, 100),
+		"trusted_dhcp_server_ip_addresses": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+	}
+	for k, v := range attrs {
+		defaults[k] = v
 	}
 
 	return tftypes.NewValue(tftypes.Object{
 		AttributeTypes: map[string]tftypes.Type{
-			"id":                                 tftypes.String,
-			"site_id":                            tftypes.String,
-			"name":                               tftypes.String,
-			"management":                         tftypes.String,
-			"enabled":                            tftypes.Bool,
-			"vlan_id":                            tftypes.Number,
-			"trusted_dhcp_server_ip_addresses":   tftypes.List{ElementType: tftypes.String},
+			"id":                               tftypes.String,
+			"site_id":                          tftypes.String,
+			"name":                             tftypes.String,
+			"management":                       tftypes.String,
+			"enabled":                          tftypes.Bool,
+			"vlan_id":                          tftypes.Number,
+			"trusted_dhcp_server_ip_addresses": tftypes.List{ElementType: tftypes.String},
 		},
-	}, map[string]tftypes.Value{
-		"id":                               tftypes.NewValue(tftypes.String, id),
-		"site_id":                          tftypes.NewValue(tftypes.String, siteID),
-		"name":                             tftypes.NewValue(tftypes.String, name),
-		"management":                       tftypes.NewValue(tftypes.String, management),
-		"enabled":                          tftypes.NewValue(tftypes.Bool, enabled),
-		"vlan_id":                          tftypes.NewValue(tftypes.Number, vlanID),
-		"trusted_dhcp_server_ip_addresses": dhcpVal,
-	})
+	}, defaults)
 }
 
-// firewallZoneTFValue builds a tftypes.Value for a firewall zone resource model.
-// id can be a string or nil (for computed/unknown).
-func firewallZoneTFValue(t *testing.T, id interface{}, siteID, name string, networkIDs []string) tftypes.Value {
+// firewallZoneTFValue builds a tftypes.Value for a firewall zone resource/data source model.
+// Pass nil or a map of overrides to customize specific attributes.
+func firewallZoneTFValue(t *testing.T, attrs map[string]tftypes.Value) tftypes.Value {
 	t.Helper()
 
-	vals := make([]tftypes.Value, len(networkIDs))
-	for i, nid := range networkIDs {
-		vals[i] = tftypes.NewValue(tftypes.String, nid)
+	defaults := map[string]tftypes.Value{
+		"id":          tftypes.NewValue(tftypes.String, nil),
+		"site_id":     tftypes.NewValue(tftypes.String, "site-1"),
+		"name":        tftypes.NewValue(tftypes.String, "Test Zone"),
+		"network_ids": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{tftypes.NewValue(tftypes.String, "net-1")}),
+	}
+	for k, v := range attrs {
+		defaults[k] = v
 	}
 
 	return tftypes.NewValue(tftypes.Object{
@@ -71,12 +69,16 @@ func firewallZoneTFValue(t *testing.T, id interface{}, siteID, name string, netw
 			"name":        tftypes.String,
 			"network_ids": tftypes.List{ElementType: tftypes.String},
 		},
-	}, map[string]tftypes.Value{
-		"id":          tftypes.NewValue(tftypes.String, id),
-		"site_id":     tftypes.NewValue(tftypes.String, siteID),
-		"name":        tftypes.NewValue(tftypes.String, name),
-		"network_ids": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, vals),
-	})
+	}, defaults)
+}
+
+// stringListVal builds a tftypes list of strings.
+func stringListVal(vals ...string) tftypes.Value {
+	elems := make([]tftypes.Value, len(vals))
+	for i, v := range vals {
+		elems[i] = tftypes.NewValue(tftypes.String, v)
+	}
+	return tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, elems)
 }
 
 // resourceSchemaFor extracts the schema from any resource.Resource implementation.
@@ -160,7 +162,7 @@ func TestNetworkResourceCreate(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	planVal := networkTFValue(t, nil, "site-1", "Test Net", client.ManagementUnmanaged, true, 100, nil)
+	planVal := networkTFValue(t, nil)
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Create(context.Background(), resource.CreateRequest{
@@ -186,7 +188,10 @@ func TestNetworkResourceRead(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	stateVal := networkTFValue(t, "net-123", "site-1", "Test Net", client.ManagementGateway, true, 100, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":         tftypes.NewValue(tftypes.String, "net-123"),
+		"management": tftypes.NewValue(tftypes.String, client.ManagementGateway),
+	})
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
 	r.Read(context.Background(), resource.ReadRequest{
@@ -203,7 +208,10 @@ func TestNetworkResourceReadNotFound(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	stateVal := networkTFValue(t, "net-gone", "site-1", "Gone", client.ManagementUnmanaged, true, 100, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "net-gone"),
+		"name": tftypes.NewValue(tftypes.String, "Gone"),
+	})
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
 	r.Read(context.Background(), resource.ReadRequest{
@@ -230,8 +238,17 @@ func TestNetworkResourceUpdate(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	stateVal := networkTFValue(t, "net-123", "site-1", "Old Net", client.ManagementUnmanaged, true, 100, nil)
-	planVal := networkTFValue(t, "net-123", "site-1", "Updated Net", client.ManagementGateway, false, 200, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "net-123"),
+		"name": tftypes.NewValue(tftypes.String, "Old Net"),
+	})
+	planVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":         tftypes.NewValue(tftypes.String, "net-123"),
+		"name":       tftypes.NewValue(tftypes.String, "Updated Net"),
+		"management": tftypes.NewValue(tftypes.String, client.ManagementGateway),
+		"enabled":    tftypes.NewValue(tftypes.Bool, false),
+		"vlan_id":    tftypes.NewValue(tftypes.Number, 200),
+	})
 
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Update(context.Background(), resource.UpdateRequest{
@@ -251,7 +268,10 @@ func TestNetworkResourceDelete(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	stateVal := networkTFValue(t, "net-123", "site-1", "Del Net", client.ManagementUnmanaged, true, 100, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "net-123"),
+		"name": tftypes.NewValue(tftypes.String, "Del Net"),
+	})
 
 	resp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Delete(context.Background(), resource.DeleteRequest{
@@ -267,7 +287,13 @@ func TestNetworkResourceImportState(t *testing.T) {
 	r := &NetworkResource{}
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 
-	stateVal := networkTFValue(t, nil, "", "", "", false, 0, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"site_id":    tftypes.NewValue(tftypes.String, ""),
+		"name":       tftypes.NewValue(tftypes.String, ""),
+		"management": tftypes.NewValue(tftypes.String, ""),
+		"enabled":    tftypes.NewValue(tftypes.Bool, false),
+		"vlan_id":    tftypes.NewValue(tftypes.Number, 0),
+	})
 	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
 	r.ImportState(context.Background(), resource.ImportStateRequest{ID: "site-1/net-123"}, resp)
 
@@ -280,7 +306,13 @@ func TestNetworkResourceImportStateInvalid(t *testing.T) {
 	r := &NetworkResource{}
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 
-	stateVal := networkTFValue(t, nil, "", "", "", false, 0, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"site_id":    tftypes.NewValue(tftypes.String, ""),
+		"name":       tftypes.NewValue(tftypes.String, ""),
+		"management": tftypes.NewValue(tftypes.String, ""),
+		"enabled":    tftypes.NewValue(tftypes.Bool, false),
+		"vlan_id":    tftypes.NewValue(tftypes.Number, 0),
+	})
 	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
 	r.ImportState(context.Background(), resource.ImportStateRequest{ID: "invalid"}, resp)
 
@@ -317,7 +349,9 @@ func TestFirewallZoneResourceCreate(t *testing.T) {
 	r := &FirewallZoneResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
-	planVal := firewallZoneTFValue(t, nil, "site-1", "My Zone", []string{"net-1"})
+	planVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"name": tftypes.NewValue(tftypes.String, "My Zone"),
+	})
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Create(context.Background(), resource.CreateRequest{
@@ -341,7 +375,11 @@ func TestFirewallZoneResourceRead(t *testing.T) {
 	r := &FirewallZoneResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
-	stateVal := firewallZoneTFValue(t, "zone-123", "site-1", "My Zone", []string{"net-1", "net-2"})
+	stateVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"id":          tftypes.NewValue(tftypes.String, "zone-123"),
+		"name":        tftypes.NewValue(tftypes.String, "My Zone"),
+		"network_ids": stringListVal("net-1", "net-2"),
+	})
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
 	r.Read(context.Background(), resource.ReadRequest{
@@ -358,7 +396,11 @@ func TestFirewallZoneResourceReadNotFound(t *testing.T) {
 	r := &FirewallZoneResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
-	stateVal := firewallZoneTFValue(t, "zone-gone", "site-1", "Gone", []string{})
+	stateVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"id":          tftypes.NewValue(tftypes.String, "zone-gone"),
+		"name":        tftypes.NewValue(tftypes.String, "Gone"),
+		"network_ids": stringListVal(),
+	})
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
 	r.Read(context.Background(), resource.ReadRequest{
@@ -382,8 +424,15 @@ func TestFirewallZoneResourceUpdate(t *testing.T) {
 	r := &FirewallZoneResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
-	stateVal := firewallZoneTFValue(t, "zone-123", "site-1", "Old Zone", []string{"net-1"})
-	planVal := firewallZoneTFValue(t, "zone-123", "site-1", "Updated Zone", []string{"net-3"})
+	stateVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "zone-123"),
+		"name": tftypes.NewValue(tftypes.String, "Old Zone"),
+	})
+	planVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"id":          tftypes.NewValue(tftypes.String, "zone-123"),
+		"name":        tftypes.NewValue(tftypes.String, "Updated Zone"),
+		"network_ids": stringListVal("net-3"),
+	})
 
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Update(context.Background(), resource.UpdateRequest{
@@ -403,7 +452,10 @@ func TestFirewallZoneResourceDelete(t *testing.T) {
 	r := &FirewallZoneResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
-	stateVal := firewallZoneTFValue(t, "zone-123", "site-1", "Del Zone", []string{"net-1"})
+	stateVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "zone-123"),
+		"name": tftypes.NewValue(tftypes.String, "Del Zone"),
+	})
 
 	resp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Delete(context.Background(), resource.DeleteRequest{
@@ -419,7 +471,11 @@ func TestFirewallZoneResourceImportState(t *testing.T) {
 	r := &FirewallZoneResource{}
 	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 
-	stateVal := firewallZoneTFValue(t, nil, "", "", []string{})
+	stateVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"site_id":     tftypes.NewValue(tftypes.String, ""),
+		"name":        tftypes.NewValue(tftypes.String, ""),
+		"network_ids": stringListVal(),
+	})
 	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
 	r.ImportState(context.Background(), resource.ImportStateRequest{ID: "site-1/zone-123"}, resp)
 
@@ -641,7 +697,9 @@ func TestNetworkResourceCreateError(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	planVal := networkTFValue(t, nil, "site-1", "Bad Net", client.ManagementUnmanaged, true, 100, nil)
+	planVal := networkTFValue(t, map[string]tftypes.Value{
+		"name": tftypes.NewValue(tftypes.String, "Bad Net"),
+	})
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Create(context.Background(), resource.CreateRequest{
@@ -658,7 +716,10 @@ func TestNetworkResourceReadError(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	stateVal := networkTFValue(t, "net-123", "site-1", "Net", client.ManagementUnmanaged, true, 100, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "net-123"),
+		"name": tftypes.NewValue(tftypes.String, "Net"),
+	})
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
 	r.Read(context.Background(), resource.ReadRequest{
@@ -675,8 +736,16 @@ func TestNetworkResourceUpdateError(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	stateVal := networkTFValue(t, "net-123", "site-1", "Old", client.ManagementUnmanaged, true, 100, nil)
-	planVal := networkTFValue(t, "net-123", "site-1", "New", client.ManagementGateway, true, 200, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "net-123"),
+		"name": tftypes.NewValue(tftypes.String, "Old"),
+	})
+	planVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":         tftypes.NewValue(tftypes.String, "net-123"),
+		"name":       tftypes.NewValue(tftypes.String, "New"),
+		"management": tftypes.NewValue(tftypes.String, client.ManagementGateway),
+		"vlan_id":    tftypes.NewValue(tftypes.Number, 200),
+	})
 
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Update(context.Background(), resource.UpdateRequest{
@@ -694,7 +763,10 @@ func TestNetworkResourceDeleteError(t *testing.T) {
 	r := &NetworkResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewNetworkResource())
-	stateVal := networkTFValue(t, "net-123", "site-1", "Net", client.ManagementUnmanaged, true, 100, nil)
+	stateVal := networkTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "net-123"),
+		"name": tftypes.NewValue(tftypes.String, "Net"),
+	})
 
 	resp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Delete(context.Background(), resource.DeleteRequest{
@@ -711,7 +783,9 @@ func TestFirewallZoneResourceCreateError(t *testing.T) {
 	r := &FirewallZoneResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
-	planVal := firewallZoneTFValue(t, nil, "site-1", "Zone", []string{"net-1"})
+	planVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"name": tftypes.NewValue(tftypes.String, "Zone"),
+	})
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Create(context.Background(), resource.CreateRequest{
@@ -728,7 +802,10 @@ func TestFirewallZoneResourceDeleteError(t *testing.T) {
 	r := &FirewallZoneResource{client: c}
 
 	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
-	stateVal := firewallZoneTFValue(t, "zone-123", "site-1", "Zone", []string{"net-1"})
+	stateVal := firewallZoneTFValue(t, map[string]tftypes.Value{
+		"id":   tftypes.NewValue(tftypes.String, "zone-123"),
+		"name": tftypes.NewValue(tftypes.String, "Zone"),
+	})
 
 	resp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
 	r.Delete(context.Background(), resource.DeleteRequest{
@@ -784,24 +861,8 @@ func TestNetworkDataSourceReadError(t *testing.T) {
 	ds := NewNetworkDataSource()
 	schemaResp := dsSchemaFor(t, ds)
 
-	configVal := tftypes.NewValue(tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			"id":                               tftypes.String,
-			"site_id":                          tftypes.String,
-			"name":                             tftypes.String,
-			"management":                       tftypes.String,
-			"enabled":                          tftypes.Bool,
-			"vlan_id":                          tftypes.Number,
-			"trusted_dhcp_server_ip_addresses": tftypes.List{ElementType: tftypes.String},
-		},
-	}, map[string]tftypes.Value{
-		"id":                               tftypes.NewValue(tftypes.String, "net-missing"),
-		"site_id":                          tftypes.NewValue(tftypes.String, "site-1"),
-		"name":                             tftypes.NewValue(tftypes.String, nil),
-		"management":                       tftypes.NewValue(tftypes.String, nil),
-		"enabled":                          tftypes.NewValue(tftypes.Bool, nil),
-		"vlan_id":                          tftypes.NewValue(tftypes.Number, nil),
-		"trusted_dhcp_server_ip_addresses": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+	configVal := networkTFValue(t, map[string]tftypes.Value{
+		"id": tftypes.NewValue(tftypes.String, "net-missing"),
 	})
 
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -862,24 +923,8 @@ func TestNetworkDataSourceRead(t *testing.T) {
 	ds := NewNetworkDataSource()
 	schemaResp := dsSchemaFor(t, ds)
 
-	configVal := tftypes.NewValue(tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			"id":                               tftypes.String,
-			"site_id":                          tftypes.String,
-			"name":                             tftypes.String,
-			"management":                       tftypes.String,
-			"enabled":                          tftypes.Bool,
-			"vlan_id":                          tftypes.Number,
-			"trusted_dhcp_server_ip_addresses": tftypes.List{ElementType: tftypes.String},
-		},
-	}, map[string]tftypes.Value{
-		"id":                               tftypes.NewValue(tftypes.String, "net-123"),
-		"site_id":                          tftypes.NewValue(tftypes.String, "site-1"),
-		"name":                             tftypes.NewValue(tftypes.String, nil),
-		"management":                       tftypes.NewValue(tftypes.String, nil),
-		"enabled":                          tftypes.NewValue(tftypes.Bool, nil),
-		"vlan_id":                          tftypes.NewValue(tftypes.Number, nil),
-		"trusted_dhcp_server_ip_addresses": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+	configVal := networkTFValue(t, map[string]tftypes.Value{
+		"id": tftypes.NewValue(tftypes.String, "net-123"),
 	})
 
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -916,16 +961,8 @@ func TestFirewallZoneDataSourceRead(t *testing.T) {
 	ds := NewFirewallZoneDataSource()
 	schemaResp := dsSchemaFor(t, ds)
 
-	configVal := tftypes.NewValue(tftypes.Object{
-		AttributeTypes: map[string]tftypes.Type{
-			"id":          tftypes.String,
-			"site_id":     tftypes.String,
-			"name":        tftypes.String,
-			"network_ids": tftypes.List{ElementType: tftypes.String},
-		},
-	}, map[string]tftypes.Value{
+	configVal := firewallZoneTFValue(t, map[string]tftypes.Value{
 		"id":          tftypes.NewValue(tftypes.String, "zone-123"),
-		"site_id":     tftypes.NewValue(tftypes.String, "site-1"),
 		"name":        tftypes.NewValue(tftypes.String, nil),
 		"network_ids": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
 	})
