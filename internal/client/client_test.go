@@ -10,6 +10,17 @@ import (
 	"testing"
 )
 
+// newTestClient creates a test HTTP server and a Client pointing to it.
+// The server is automatically closed when the test completes.
+func newTestClient(t *testing.T, handler http.HandlerFunc) *Client {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	c := NewClient("test-key", "host-id")
+	c.SetBaseURL(server.URL)
+	return c
+}
+
 func TestNewClient(t *testing.T) {
 	c := NewClient("test-key", "test-host")
 	if c.apiKey != "test-key" {
@@ -33,7 +44,7 @@ func TestBuildURL(t *testing.T) {
 }
 
 func TestCreateNetwork(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
@@ -63,15 +74,11 @@ func TestCreateNetwork(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.CreateNetwork(context.Background(), "site-1", &Network{
 		Name:       "Test Net",
-		Management: "UNMANAGED",
+		Management: ManagementUnmanaged,
 		Enabled:    true,
 		VlanID:     100,
 	})
@@ -87,7 +94,7 @@ func TestCreateNetwork(t *testing.T) {
 }
 
 func TestGetNetwork(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
@@ -96,17 +103,13 @@ func TestGetNetwork(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(Network{
 			ID:         "net-456",
 			Name:       "My Network",
-			Management: "GATEWAY",
+			Management: ManagementGateway,
 			Enabled:    true,
 			VlanID:     200,
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.GetNetwork(context.Background(), "site-1", "net-456")
 	if err != nil {
@@ -118,7 +121,7 @@ func TestGetNetwork(t *testing.T) {
 }
 
 func TestAPIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		if err := json.NewEncoder(w).Encode(APIError{
@@ -130,11 +133,7 @@ func TestAPIError(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	_, err := c.GetNetwork(context.Background(), "site-1", "missing")
 	if err == nil {
@@ -154,7 +153,7 @@ func TestAPIError(t *testing.T) {
 }
 
 func TestCreateWifiBroadcast(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		var req WifiBroadcast
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("failed to decode request body: %v", err)
@@ -170,22 +169,18 @@ func TestCreateWifiBroadcast(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.CreateWifiBroadcast(context.Background(), "site-1", &WifiBroadcast{
-		Type:    "STANDARD",
+		Type:    BroadcastTypeStandard,
 		Name:    "TestSSID",
 		Enabled: true,
 		SecurityConfiguration: &SecurityConfiguration{
-			Type:       "WPA2_PERSONAL",
+			Type:       SecurityWPA2Personal,
 			Passphrase: "password123",
 		},
 		Network: &BroadcastNetwork{
-			Type: "NATIVE",
+			Type: NetworkTypeNative,
 		},
 	})
 	if err != nil {
@@ -197,7 +192,7 @@ func TestCreateWifiBroadcast(t *testing.T) {
 }
 
 func TestCreateFirewallZone(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		var req FirewallZone
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("failed to decode request body: %v", err)
@@ -212,11 +207,7 @@ func TestCreateFirewallZone(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.CreateFirewallZone(context.Background(), "site-1", &FirewallZone{
 		Name:       "Test Zone",
@@ -231,16 +222,12 @@ func TestCreateFirewallZone(t *testing.T) {
 }
 
 func TestDeleteNetwork(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
 			t.Errorf("expected DELETE, got %s", r.Method)
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	err := c.DeleteNetwork(context.Background(), "site-1", "net-123")
 	if err != nil {
@@ -270,7 +257,7 @@ func TestIsNotFound(t *testing.T) {
 }
 
 func TestListNetworks(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
@@ -291,11 +278,7 @@ func TestListNetworks(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	networks, err := c.ListNetworks(context.Background(), "site-1")
 	if err != nil {
@@ -307,7 +290,7 @@ func TestListNetworks(t *testing.T) {
 }
 
 func TestListSites(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(PaginatedResponse[Site]{
 			Offset:     0,
@@ -320,11 +303,7 @@ func TestListSites(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	sites, err := c.ListSites(context.Background())
 	if err != nil {
@@ -366,22 +345,6 @@ func TestIsPersonalSecurityType(t *testing.T) {
 	}
 }
 
-func TestConstants(t *testing.T) {
-	// Verify constants match expected API values
-	if ManagementUnmanaged != "UNMANAGED" {
-		t.Errorf("unexpected value: %s", ManagementUnmanaged)
-	}
-	if BroadcastTypeStandard != "STANDARD" {
-		t.Errorf("unexpected value: %s", BroadcastTypeStandard)
-	}
-	if SecurityWPA2Personal != "WPA2_PERSONAL" {
-		t.Errorf("unexpected value: %s", SecurityWPA2Personal)
-	}
-	if NetworkTypeNative != "NATIVE" {
-		t.Errorf("unexpected value: %s", NetworkTypeNative)
-	}
-}
-
 func TestAPIErrorString(t *testing.T) {
 	err := &APIError{
 		StatusCode: 404,
@@ -398,7 +361,7 @@ func TestAPIErrorString(t *testing.T) {
 }
 
 func TestUpdateNetwork(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			t.Errorf("expected PUT, got %s", r.Method)
 		}
@@ -418,11 +381,7 @@ func TestUpdateNetwork(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.UpdateNetwork(context.Background(), "site-1", "net-123", &Network{
 		Name:       "Updated Net",
@@ -442,7 +401,7 @@ func TestUpdateNetwork(t *testing.T) {
 }
 
 func TestGetWifiBroadcast(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
@@ -462,11 +421,7 @@ func TestGetWifiBroadcast(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.GetWifiBroadcast(context.Background(), "site-1", "wifi-456")
 	if err != nil {
@@ -481,7 +436,7 @@ func TestGetWifiBroadcast(t *testing.T) {
 }
 
 func TestUpdateWifiBroadcast(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			t.Errorf("expected PUT, got %s", r.Method)
 		}
@@ -499,11 +454,7 @@ func TestUpdateWifiBroadcast(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.UpdateWifiBroadcast(context.Background(), "site-1", "wifi-456", &WifiBroadcast{
 		Name: "Updated WiFi",
@@ -518,16 +469,12 @@ func TestUpdateWifiBroadcast(t *testing.T) {
 }
 
 func TestDeleteWifiBroadcast(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
 			t.Errorf("expected DELETE, got %s", r.Method)
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	err := c.DeleteWifiBroadcast(context.Background(), "site-1", "wifi-456")
 	if err != nil {
@@ -536,7 +483,7 @@ func TestDeleteWifiBroadcast(t *testing.T) {
 }
 
 func TestGetFirewallZone(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
@@ -549,11 +496,7 @@ func TestGetFirewallZone(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.GetFirewallZone(context.Background(), "site-1", "zone-456")
 	if err != nil {
@@ -568,7 +511,7 @@ func TestGetFirewallZone(t *testing.T) {
 }
 
 func TestUpdateFirewallZone(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			t.Errorf("expected PUT, got %s", r.Method)
 		}
@@ -586,11 +529,7 @@ func TestUpdateFirewallZone(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.UpdateFirewallZone(context.Background(), "site-1", "zone-456", &FirewallZone{
 		Name:       "Updated Zone",
@@ -605,16 +544,12 @@ func TestUpdateFirewallZone(t *testing.T) {
 }
 
 func TestDeleteFirewallZone(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
 			t.Errorf("expected DELETE, got %s", r.Method)
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	err := c.DeleteFirewallZone(context.Background(), "site-1", "zone-456")
 	if err != nil {
@@ -623,7 +558,7 @@ func TestDeleteFirewallZone(t *testing.T) {
 }
 
 func TestGetDevice(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
@@ -642,11 +577,7 @@ func TestGetDevice(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	result, err := c.GetDevice(context.Background(), "site-1", "dev-123")
 	if err != nil {
@@ -664,7 +595,7 @@ func TestGetDevice(t *testing.T) {
 }
 
 func TestListDevices(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(PaginatedResponse[Device]{
 			Offset:     0,
@@ -678,11 +609,7 @@ func TestListDevices(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	devices, err := c.ListDevices(context.Background(), "site-1")
 	if err != nil {
@@ -694,14 +621,10 @@ func TestListDevices(t *testing.T) {
 }
 
 func TestNonJSONErrorResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Internal Server Error"))
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	_, err := c.GetNetwork(context.Background(), "site-1", "net-1")
 	if err == nil {
@@ -716,7 +639,7 @@ func TestNonJSONErrorResponse(t *testing.T) {
 }
 
 func TestAPIErrorOnCreate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(APIError{
@@ -726,11 +649,7 @@ func TestAPIErrorOnCreate(t *testing.T) {
 			Message:    "Invalid VLAN ID",
 			RequestID:  "req-999",
 		})
-	}))
-	defer server.Close()
-
-	c := NewClient("test-key", "host-id")
-	c.baseURL = server.URL
+	})
 
 	_, err := c.CreateNetwork(context.Background(), "site-1", &Network{
 		Name:   "Bad Net",

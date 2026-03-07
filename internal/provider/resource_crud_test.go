@@ -79,9 +79,9 @@ func firewallZoneTFValue(t *testing.T, id interface{}, siteID, name string, netw
 	})
 }
 
-func networkSchema(t *testing.T) resource.SchemaResponse {
+// resourceSchemaFor extracts the schema from any resource.Resource implementation.
+func resourceSchemaFor(t *testing.T, r resource.Resource) resource.SchemaResponse {
 	t.Helper()
-	r := NewNetworkResource()
 	resp := &resource.SchemaResponse{}
 	r.Schema(context.Background(), resource.SchemaRequest{}, resp)
 	if resp.Diagnostics.HasError() {
@@ -90,15 +90,35 @@ func networkSchema(t *testing.T) resource.SchemaResponse {
 	return *resp
 }
 
-func firewallZoneSchema(t *testing.T) resource.SchemaResponse {
+// dsSchemaFor extracts the schema from any datasource.DataSource implementation.
+func dsSchemaFor(t *testing.T, ds datasource.DataSource) datasource.SchemaResponse {
 	t.Helper()
-	r := NewFirewallZoneResource()
-	resp := &resource.SchemaResponse{}
-	r.Schema(context.Background(), resource.SchemaRequest{}, resp)
+	resp := &datasource.SchemaResponse{}
+	ds.Schema(context.Background(), datasource.SchemaRequest{}, resp)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected schema errors: %v", resp.Diagnostics)
 	}
 	return *resp
+}
+
+// newTestProvider creates a mock HTTP server and returns a configured client.
+// The server is automatically closed when the test completes.
+func newTestProvider(t *testing.T, handler http.HandlerFunc) *client.Client {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	c := client.NewClient("key", "host")
+	c.SetBaseURL(server.URL)
+	return c
+}
+
+// apiErrorHandler returns an HTTP handler that responds with the given API error.
+func apiErrorHandler(statusCode int, statusName string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusCode)
+		json.NewEncoder(w).Encode(client.APIError{StatusCode: statusCode, StatusName: statusName})
+	}
 }
 
 // --- Network Resource CRUD tests ---
@@ -126,7 +146,7 @@ func TestNetworkResourceConfigure(t *testing.T) {
 }
 
 func TestNetworkResourceCreate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(client.Network{
@@ -136,14 +156,10 @@ func TestNetworkResourceCreate(t *testing.T) {
 			Enabled:    true,
 			VlanID:     100,
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	planVal := networkTFValue(t, nil, "site-1", "Test Net", client.ManagementUnmanaged, true, 100, nil)
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -157,7 +173,7 @@ func TestNetworkResourceCreate(t *testing.T) {
 }
 
 func TestNetworkResourceRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.Network{
 			ID:         "net-123",
@@ -166,14 +182,10 @@ func TestNetworkResourceRead(t *testing.T) {
 			Enabled:    true,
 			VlanID:     100,
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	stateVal := networkTFValue(t, "net-123", "site-1", "Test Net", client.ManagementGateway, true, 100, nil)
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -187,22 +199,10 @@ func TestNetworkResourceRead(t *testing.T) {
 }
 
 func TestNetworkResourceReadNotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(client.APIError{
-			StatusCode: 404,
-			StatusName: "NOT_FOUND",
-			Message:    "Not found",
-		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusNotFound, "NOT_FOUND"))
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	stateVal := networkTFValue(t, "net-gone", "site-1", "Gone", client.ManagementUnmanaged, true, 100, nil)
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -217,7 +217,7 @@ func TestNetworkResourceReadNotFound(t *testing.T) {
 }
 
 func TestNetworkResourceUpdate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.Network{
 			ID:         "net-123",
@@ -226,14 +226,10 @@ func TestNetworkResourceUpdate(t *testing.T) {
 			Enabled:    false,
 			VlanID:     200,
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	stateVal := networkTFValue(t, "net-123", "site-1", "Old Net", client.ManagementUnmanaged, true, 100, nil)
 	planVal := networkTFValue(t, "net-123", "site-1", "Updated Net", client.ManagementGateway, false, 200, nil)
 
@@ -249,16 +245,12 @@ func TestNetworkResourceUpdate(t *testing.T) {
 }
 
 func TestNetworkResourceDelete(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	stateVal := networkTFValue(t, "net-123", "site-1", "Del Net", client.ManagementUnmanaged, true, 100, nil)
 
 	resp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -273,7 +265,7 @@ func TestNetworkResourceDelete(t *testing.T) {
 
 func TestNetworkResourceImportState(t *testing.T) {
 	r := &NetworkResource{}
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 
 	stateVal := networkTFValue(t, nil, "", "", "", false, 0, nil)
 	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -286,7 +278,7 @@ func TestNetworkResourceImportState(t *testing.T) {
 
 func TestNetworkResourceImportStateInvalid(t *testing.T) {
 	r := &NetworkResource{}
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 
 	stateVal := networkTFValue(t, nil, "", "", "", false, 0, nil)
 	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -313,7 +305,7 @@ func TestFirewallZoneResourceConfigure(t *testing.T) {
 }
 
 func TestFirewallZoneResourceCreate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(client.FirewallZone{
@@ -321,14 +313,10 @@ func TestFirewallZoneResourceCreate(t *testing.T) {
 			Name:       "My Zone",
 			NetworkIDs: []string{"net-1"},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &FirewallZoneResource{client: c}
 
-	schemaResp := firewallZoneSchema(t)
+	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 	planVal := firewallZoneTFValue(t, nil, "site-1", "My Zone", []string{"net-1"})
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -342,21 +330,17 @@ func TestFirewallZoneResourceCreate(t *testing.T) {
 }
 
 func TestFirewallZoneResourceRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.FirewallZone{
 			ID:         "zone-123",
 			Name:       "My Zone",
 			NetworkIDs: []string{"net-1", "net-2"},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &FirewallZoneResource{client: c}
 
-	schemaResp := firewallZoneSchema(t)
+	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 	stateVal := firewallZoneTFValue(t, "zone-123", "site-1", "My Zone", []string{"net-1", "net-2"})
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -370,18 +354,10 @@ func TestFirewallZoneResourceRead(t *testing.T) {
 }
 
 func TestFirewallZoneResourceReadNotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 404, StatusName: "NOT_FOUND"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusNotFound, "NOT_FOUND"))
 	r := &FirewallZoneResource{client: c}
 
-	schemaResp := firewallZoneSchema(t)
+	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 	stateVal := firewallZoneTFValue(t, "zone-gone", "site-1", "Gone", []string{})
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -395,21 +371,17 @@ func TestFirewallZoneResourceReadNotFound(t *testing.T) {
 }
 
 func TestFirewallZoneResourceUpdate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.FirewallZone{
 			ID:         "zone-123",
 			Name:       "Updated Zone",
 			NetworkIDs: []string{"net-3"},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &FirewallZoneResource{client: c}
 
-	schemaResp := firewallZoneSchema(t)
+	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 	stateVal := firewallZoneTFValue(t, "zone-123", "site-1", "Old Zone", []string{"net-1"})
 	planVal := firewallZoneTFValue(t, "zone-123", "site-1", "Updated Zone", []string{"net-3"})
 
@@ -425,16 +397,12 @@ func TestFirewallZoneResourceUpdate(t *testing.T) {
 }
 
 func TestFirewallZoneResourceDelete(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &FirewallZoneResource{client: c}
 
-	schemaResp := firewallZoneSchema(t)
+	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 	stateVal := firewallZoneTFValue(t, "zone-123", "site-1", "Del Zone", []string{"net-1"})
 
 	resp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -449,7 +417,7 @@ func TestFirewallZoneResourceDelete(t *testing.T) {
 
 func TestFirewallZoneResourceImportState(t *testing.T) {
 	r := &FirewallZoneResource{}
-	schemaResp := firewallZoneSchema(t)
+	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 
 	stateVal := firewallZoneTFValue(t, nil, "", "", []string{})
 	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -462,31 +430,20 @@ func TestFirewallZoneResourceImportState(t *testing.T) {
 
 // --- WiFi Broadcast Resource CRUD tests ---
 
-func wifiBroadcastSchema(t *testing.T) resource.SchemaResponse {
-	t.Helper()
-	r := NewWifiBroadcastResource()
-	resp := &resource.SchemaResponse{}
-	r.Schema(context.Background(), resource.SchemaRequest{}, resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected schema errors: %v", resp.Diagnostics)
-	}
-	return *resp
-}
-
 func wifiBroadcastTFValue(t *testing.T, attrs map[string]tftypes.Value) tftypes.Value {
 	t.Helper()
 
 	defaults := map[string]tftypes.Value{
 		"id":                                      tftypes.NewValue(tftypes.String, nil),
 		"site_id":                                 tftypes.NewValue(tftypes.String, "site-1"),
-		"type":                                    tftypes.NewValue(tftypes.String, "STANDARD"),
+		"type":                                    tftypes.NewValue(tftypes.String, client.BroadcastTypeStandard),
 		"name":                                    tftypes.NewValue(tftypes.String, "Test WiFi"),
 		"enabled":                                 tftypes.NewValue(tftypes.Bool, true),
-		"security_type":                           tftypes.NewValue(tftypes.String, "OPEN"),
+		"security_type":                           tftypes.NewValue(tftypes.String, client.SecurityOpen),
 		"passphrase":                              tftypes.NewValue(tftypes.String, nil),
 		"passphrase_wo":                           tftypes.NewValue(tftypes.String, nil),
 		"passphrase_wo_version":                   tftypes.NewValue(tftypes.Number, nil),
-		"network_type":                            tftypes.NewValue(tftypes.String, "NATIVE"),
+		"network_type":                            tftypes.NewValue(tftypes.String, client.NetworkTypeNative),
 		"network_id":                              tftypes.NewValue(tftypes.String, nil),
 		"client_isolation_enabled":                tftypes.NewValue(tftypes.Bool, false),
 		"hide_name":                               tftypes.NewValue(tftypes.Bool, false),
@@ -532,7 +489,7 @@ func TestWifiBroadcastResourceConfigure(t *testing.T) {
 }
 
 func TestWifiBroadcastResourceCreate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(client.WifiBroadcast{
@@ -543,14 +500,10 @@ func TestWifiBroadcastResourceCreate(t *testing.T) {
 			SecurityConfiguration: &client.SecurityConfiguration{Type: client.SecurityOpen},
 			Network:               &client.BroadcastNetwork{Type: client.NetworkTypeNative},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &WifiBroadcastResource{client: c}
 
-	schemaResp := wifiBroadcastSchema(t)
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 	planVal := wifiBroadcastTFValue(t, nil)
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -565,7 +518,7 @@ func TestWifiBroadcastResourceCreate(t *testing.T) {
 }
 
 func TestWifiBroadcastResourceRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.WifiBroadcast{
 			ID:      "wifi-123",
@@ -575,14 +528,10 @@ func TestWifiBroadcastResourceRead(t *testing.T) {
 			SecurityConfiguration: &client.SecurityConfiguration{Type: client.SecurityOpen},
 			Network:               &client.BroadcastNetwork{Type: client.NetworkTypeNative},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &WifiBroadcastResource{client: c}
 
-	schemaResp := wifiBroadcastSchema(t)
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 	stateVal := wifiBroadcastTFValue(t, map[string]tftypes.Value{
 		"id": tftypes.NewValue(tftypes.String, "wifi-123"),
 	})
@@ -598,18 +547,10 @@ func TestWifiBroadcastResourceRead(t *testing.T) {
 }
 
 func TestWifiBroadcastResourceReadNotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 404, StatusName: "NOT_FOUND"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusNotFound, "NOT_FOUND"))
 	r := &WifiBroadcastResource{client: c}
 
-	schemaResp := wifiBroadcastSchema(t)
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 	stateVal := wifiBroadcastTFValue(t, map[string]tftypes.Value{
 		"id": tftypes.NewValue(tftypes.String, "wifi-gone"),
 	})
@@ -625,7 +566,7 @@ func TestWifiBroadcastResourceReadNotFound(t *testing.T) {
 }
 
 func TestWifiBroadcastResourceUpdate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.WifiBroadcast{
 			ID:      "wifi-123",
@@ -635,14 +576,10 @@ func TestWifiBroadcastResourceUpdate(t *testing.T) {
 			SecurityConfiguration: &client.SecurityConfiguration{Type: client.SecurityOpen},
 			Network:               &client.BroadcastNetwork{Type: client.NetworkTypeNative},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &WifiBroadcastResource{client: c}
 
-	schemaResp := wifiBroadcastSchema(t)
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 	stateVal := wifiBroadcastTFValue(t, map[string]tftypes.Value{
 		"id": tftypes.NewValue(tftypes.String, "wifi-123"),
 	})
@@ -664,16 +601,12 @@ func TestWifiBroadcastResourceUpdate(t *testing.T) {
 }
 
 func TestWifiBroadcastResourceDelete(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	r := &WifiBroadcastResource{client: c}
 
-	schemaResp := wifiBroadcastSchema(t)
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 	stateVal := wifiBroadcastTFValue(t, map[string]tftypes.Value{
 		"id": tftypes.NewValue(tftypes.String, "wifi-123"),
 	})
@@ -690,7 +623,7 @@ func TestWifiBroadcastResourceDelete(t *testing.T) {
 
 func TestWifiBroadcastResourceImportState(t *testing.T) {
 	r := &WifiBroadcastResource{}
-	schemaResp := wifiBroadcastSchema(t)
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 
 	stateVal := wifiBroadcastTFValue(t, nil)
 	resp := &resource.ImportStateResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -704,18 +637,10 @@ func TestWifiBroadcastResourceImportState(t *testing.T) {
 // --- Error path tests ---
 
 func TestNetworkResourceCreateError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 400, StatusName: "BAD_REQUEST", Message: "Invalid"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusBadRequest, "BAD_REQUEST"))
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	planVal := networkTFValue(t, nil, "site-1", "Bad Net", client.ManagementUnmanaged, true, 100, nil)
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -729,18 +654,10 @@ func TestNetworkResourceCreateError(t *testing.T) {
 }
 
 func TestNetworkResourceReadError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 500, StatusName: "INTERNAL"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusInternalServerError, "INTERNAL"))
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	stateVal := networkTFValue(t, "net-123", "site-1", "Net", client.ManagementUnmanaged, true, 100, nil)
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: schemaResp.Schema, Raw: stateVal}}
@@ -754,18 +671,10 @@ func TestNetworkResourceReadError(t *testing.T) {
 }
 
 func TestNetworkResourceUpdateError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 400, StatusName: "BAD_REQUEST"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusBadRequest, "BAD_REQUEST"))
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	stateVal := networkTFValue(t, "net-123", "site-1", "Old", client.ManagementUnmanaged, true, 100, nil)
 	planVal := networkTFValue(t, "net-123", "site-1", "New", client.ManagementGateway, true, 200, nil)
 
@@ -781,18 +690,10 @@ func TestNetworkResourceUpdateError(t *testing.T) {
 }
 
 func TestNetworkResourceDeleteError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 403, StatusName: "FORBIDDEN"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusForbidden, "FORBIDDEN"))
 	r := &NetworkResource{client: c}
 
-	schemaResp := networkSchema(t)
+	schemaResp := resourceSchemaFor(t, NewNetworkResource())
 	stateVal := networkTFValue(t, "net-123", "site-1", "Net", client.ManagementUnmanaged, true, 100, nil)
 
 	resp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -806,18 +707,10 @@ func TestNetworkResourceDeleteError(t *testing.T) {
 }
 
 func TestFirewallZoneResourceCreateError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 400, StatusName: "BAD_REQUEST"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusBadRequest, "BAD_REQUEST"))
 	r := &FirewallZoneResource{client: c}
 
-	schemaResp := firewallZoneSchema(t)
+	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 	planVal := firewallZoneTFValue(t, nil, "site-1", "Zone", []string{"net-1"})
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -831,18 +724,10 @@ func TestFirewallZoneResourceCreateError(t *testing.T) {
 }
 
 func TestFirewallZoneResourceDeleteError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 403, StatusName: "FORBIDDEN"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusForbidden, "FORBIDDEN"))
 	r := &FirewallZoneResource{client: c}
 
-	schemaResp := firewallZoneSchema(t)
+	schemaResp := resourceSchemaFor(t, NewFirewallZoneResource())
 	stateVal := firewallZoneTFValue(t, "zone-123", "site-1", "Zone", []string{"net-1"})
 
 	resp := &resource.DeleteResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -856,18 +741,10 @@ func TestFirewallZoneResourceDeleteError(t *testing.T) {
 }
 
 func TestWifiBroadcastResourceCreateError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 400, StatusName: "BAD_REQUEST"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusBadRequest, "BAD_REQUEST"))
 	r := &WifiBroadcastResource{client: c}
 
-	schemaResp := wifiBroadcastSchema(t)
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 	planVal := wifiBroadcastTFValue(t, nil)
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: schemaResp.Schema}}
@@ -882,18 +759,10 @@ func TestWifiBroadcastResourceCreateError(t *testing.T) {
 }
 
 func TestWifiBroadcastResourceDeleteError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 403, StatusName: "FORBIDDEN"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusForbidden, "FORBIDDEN"))
 	r := &WifiBroadcastResource{client: c}
 
-	schemaResp := wifiBroadcastSchema(t)
+	schemaResp := resourceSchemaFor(t, NewWifiBroadcastResource())
 	stateVal := wifiBroadcastTFValue(t, map[string]tftypes.Value{
 		"id": tftypes.NewValue(tftypes.String, "wifi-123"),
 	})
@@ -909,15 +778,7 @@ func TestWifiBroadcastResourceDeleteError(t *testing.T) {
 }
 
 func TestNetworkDataSourceReadError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 404, StatusName: "NOT_FOUND"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusNotFound, "NOT_FOUND"))
 	d := &NetworkDataSource{client: c}
 
 	ds := NewNetworkDataSource()
@@ -954,15 +815,7 @@ func TestNetworkDataSourceReadError(t *testing.T) {
 }
 
 func TestSitesDataSourceReadError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(client.APIError{StatusCode: 500, StatusName: "INTERNAL"})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	c := newTestProvider(t, apiErrorHandler(http.StatusInternalServerError, "INTERNAL"))
 	d := &SitesDataSource{client: c}
 
 	ds := NewSitesDataSource()
@@ -980,16 +833,6 @@ func TestSitesDataSourceReadError(t *testing.T) {
 
 // --- Data Source CRUD tests ---
 
-func dsSchemaFor(t *testing.T, ds datasource.DataSource) datasource.SchemaResponse {
-	t.Helper()
-	resp := &datasource.SchemaResponse{}
-	ds.Schema(context.Background(), datasource.SchemaRequest{}, resp)
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected schema errors: %v", resp.Diagnostics)
-	}
-	return *resp
-}
-
 func TestNetworkDataSourceConfigure(t *testing.T) {
 	d := &NetworkDataSource{}
 	c := client.NewClient("key", "host")
@@ -1004,7 +847,7 @@ func TestNetworkDataSourceConfigure(t *testing.T) {
 }
 
 func TestNetworkDataSourceRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.Network{
 			ID:         "net-123",
@@ -1013,11 +856,7 @@ func TestNetworkDataSourceRead(t *testing.T) {
 			Enabled:    true,
 			VlanID:     100,
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	d := &NetworkDataSource{client: c}
 
 	ds := NewNetworkDataSource()
@@ -1064,18 +903,14 @@ func TestFirewallZoneDataSourceConfigure(t *testing.T) {
 }
 
 func TestFirewallZoneDataSourceRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.FirewallZone{
 			ID:         "zone-123",
 			Name:       "My Zone",
 			NetworkIDs: []string{"net-1"},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	d := &FirewallZoneDataSource{client: c}
 
 	ds := NewFirewallZoneDataSource()
@@ -1116,28 +951,24 @@ func TestDeviceDataSourceConfigure(t *testing.T) {
 }
 
 func TestDeviceDataSourceRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.Device{
-			ID:              "dev-123",
-			MacAddress:      "aa:bb:cc:dd:ee:ff",
-			IPAddress:       "192.168.1.1",
-			Name:            "Switch",
-			Model:           "USW-24",
-			Supported:       true,
-			State:           "ONLINE",
-			FirmwareVersion: "7.0.0",
+			ID:                "dev-123",
+			MacAddress:        "aa:bb:cc:dd:ee:ff",
+			IPAddress:         "192.168.1.1",
+			Name:              "Switch",
+			Model:             "USW-24",
+			Supported:         true,
+			State:             "ONLINE",
+			FirmwareVersion:   "7.0.0",
 			FirmwareUpdatable: true,
-			AdoptedAt:       "2024-01-01",
-			ProvisionedAt:   "2024-01-02",
-			ConfigurationID: "cfg-1",
-			Uplink:          &client.DeviceUplink{DeviceID: "dev-parent"},
+			AdoptedAt:         "2024-01-01",
+			ProvisionedAt:     "2024-01-02",
+			ConfigurationID:   "cfg-1",
+			Uplink:            &client.DeviceUplink{DeviceID: "dev-parent"},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	d := &DeviceDataSource{client: c}
 
 	ds := NewDeviceDataSource()
@@ -1145,20 +976,20 @@ func TestDeviceDataSourceRead(t *testing.T) {
 
 	configVal := tftypes.NewValue(tftypes.Object{
 		AttributeTypes: map[string]tftypes.Type{
-			"id":                tftypes.String,
-			"site_id":           tftypes.String,
-			"mac_address":       tftypes.String,
-			"ip_address":        tftypes.String,
-			"name":              tftypes.String,
-			"model":             tftypes.String,
-			"supported":         tftypes.Bool,
-			"state":             tftypes.String,
-			"firmware_version":  tftypes.String,
+			"id":                 tftypes.String,
+			"site_id":            tftypes.String,
+			"mac_address":        tftypes.String,
+			"ip_address":         tftypes.String,
+			"name":               tftypes.String,
+			"model":              tftypes.String,
+			"supported":          tftypes.Bool,
+			"state":              tftypes.String,
+			"firmware_version":   tftypes.String,
 			"firmware_updatable": tftypes.Bool,
-			"adopted_at":        tftypes.String,
-			"provisioned_at":    tftypes.String,
-			"configuration_id":  tftypes.String,
-			"uplink_device_id":  tftypes.String,
+			"adopted_at":         tftypes.String,
+			"provisioned_at":     tftypes.String,
+			"configuration_id":   tftypes.String,
+			"uplink_device_id":   tftypes.String,
 		},
 	}, map[string]tftypes.Value{
 		"id":                 tftypes.NewValue(tftypes.String, "dev-123"),
@@ -1198,7 +1029,7 @@ func TestSitesDataSourceConfigure(t *testing.T) {
 }
 
 func TestSitesDataSourceRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.PaginatedResponse[client.Site]{
 			Data: []client.Site{
@@ -1208,11 +1039,7 @@ func TestSitesDataSourceRead(t *testing.T) {
 			TotalCount: 2,
 			Count:      2,
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	d := &SitesDataSource{client: c}
 
 	ds := NewSitesDataSource()
@@ -1239,7 +1066,7 @@ func TestWifiBroadcastDataSourceConfigure(t *testing.T) {
 }
 
 func TestWifiBroadcastDataSourceRead(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	c := newTestProvider(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(client.WifiBroadcast{
 			ID:      "wifi-123",
@@ -1249,11 +1076,7 @@ func TestWifiBroadcastDataSourceRead(t *testing.T) {
 			SecurityConfiguration: &client.SecurityConfiguration{Type: client.SecurityWPA2Personal},
 			Network:               &client.BroadcastNetwork{Type: client.NetworkTypeNative},
 		})
-	}))
-	defer server.Close()
-
-	c := client.NewClient("key", "host")
-	c.SetBaseURL(server.URL)
+	})
 	d := &WifiBroadcastDataSource{client: c}
 
 	ds := NewWifiBroadcastDataSource()
