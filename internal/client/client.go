@@ -41,6 +41,15 @@ const (
 	SecurityWPA2WPA3Enterprise = "WPA2_WPA3_ENTERPRISE"
 )
 
+// IsPersonalSecurityType returns true if the security type requires a passphrase.
+func IsPersonalSecurityType(t string) bool {
+	switch t {
+	case SecurityWPA2Personal, SecurityWPA3Personal, SecurityWPA2WPA3Personal:
+		return true
+	}
+	return false
+}
+
 // Network assignment types for WiFi broadcasts.
 const (
 	NetworkTypeNative   = "NATIVE"

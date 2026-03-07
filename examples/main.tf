@@ -39,16 +39,19 @@ resource "unifi_network" "iot" {
   vlan_id    = 30
 }
 
-# Create a WiFi broadcast for the IoT network
+# Create a WiFi broadcast for the IoT network.
+# Uses passphrase_wo so the password is never stored in the Terraform state.
+# Increment passphrase_wo_version when rotating the password.
 resource "unifi_wifi_broadcast" "iot_wifi" {
-  site_id       = local.site_id
-  type          = "IOT_OPTIMIZED"
-  name          = "IoT WiFi"
-  enabled       = true
-  security_type = "WPA2_WPA3_PERSONAL"
-  passphrase    = var.iot_wifi_password
-  network_type  = "SPECIFIC"
-  network_id    = unifi_network.iot.id
+  site_id               = local.site_id
+  type                  = "IOT_OPTIMIZED"
+  name                  = "IoT WiFi"
+  enabled               = true
+  security_type         = "WPA2_WPA3_PERSONAL"
+  passphrase_wo         = var.iot_wifi_password
+  passphrase_wo_version = 1
+  network_type          = "SPECIFIC"
+  network_id            = unifi_network.iot.id
 }
 
 variable "iot_wifi_password" {

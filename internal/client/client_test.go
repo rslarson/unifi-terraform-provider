@@ -338,6 +338,34 @@ func TestListSites(t *testing.T) {
 	}
 }
 
+func TestIsPersonalSecurityType(t *testing.T) {
+	tests := []struct {
+		securityType string
+		want         bool
+	}{
+		{SecurityWPA2Personal, true},
+		{SecurityWPA3Personal, true},
+		{SecurityWPA2WPA3Personal, true},
+		{SecurityOpen, false},
+		{SecurityWPA2Enterprise, false},
+		{SecurityWPA3Enterprise, false},
+		{SecurityWPA2WPA3Enterprise, false},
+		{"UNKNOWN", false},
+		{"", false},
+	}
+	for _, tt := range tests {
+		name := tt.securityType
+		if name == "" {
+			name = "empty"
+		}
+		t.Run(name, func(t *testing.T) {
+			if got := IsPersonalSecurityType(tt.securityType); got != tt.want {
+				t.Errorf("IsPersonalSecurityType(%q) = %v, want %v", tt.securityType, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestConstants(t *testing.T) {
 	// Verify constants match expected API values
 	if ManagementUnmanaged != "UNMANAGED" {

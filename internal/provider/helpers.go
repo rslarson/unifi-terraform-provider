@@ -155,7 +155,9 @@ func firewallZoneAPIToModel(ctx context.Context, result *client.FirewallZone) (n
 }
 
 // wifiBroadcastModelToAPI converts a WifiBroadcastResourceModel to a client.WifiBroadcast.
-func wifiBroadcastModelToAPI(plan WifiBroadcastResourceModel) *client.WifiBroadcast {
+// passphraseWO carries the write-only passphrase value read from the config
+// (the framework nulls it out in plan/state).
+func wifiBroadcastModelToAPI(plan WifiBroadcastResourceModel, passphraseWO types.String) *client.WifiBroadcast {
 	broadcast := &client.WifiBroadcast{
 		Type:                                plan.Type.ValueString(),
 		Name:                                plan.Name.ValueString(),
@@ -172,7 +174,11 @@ func wifiBroadcastModelToAPI(plan WifiBroadcastResourceModel) *client.WifiBroadc
 		},
 	}
 
-	if !plan.Passphrase.IsNull() && !plan.Passphrase.IsUnknown() {
+	// Resolve the passphrase: prefer the write-only passphrase_wo, fall back
+	// to the legacy passphrase attribute from the plan.
+	if !passphraseWO.IsNull() && !passphraseWO.IsUnknown() {
+		broadcast.SecurityConfiguration.Passphrase = passphraseWO.ValueString()
+	} else if !plan.Passphrase.IsNull() && !plan.Passphrase.IsUnknown() {
 		broadcast.SecurityConfiguration.Passphrase = plan.Passphrase.ValueString()
 	}
 

@@ -12,16 +12,17 @@ Manages a UniFi WiFi broadcast (SSID). Configure wireless networks with security
 ## Example Usage
 
 ```terraform
-# WPA2/WPA3 Personal WiFi on a specific network
+# WPA2/WPA3 Personal WiFi using write-only passphrase (recommended)
 resource "unifi_wifi_broadcast" "home" {
-  site_id       = local.site_id
-  type          = "STANDARD"
-  name          = "Home WiFi"
-  enabled       = true
-  security_type = "WPA2_WPA3_PERSONAL"
-  passphrase    = var.wifi_password
-  network_type  = "SPECIFIC"
-  network_id    = unifi_network.main.id
+  site_id                = local.site_id
+  type                   = "STANDARD"
+  name                   = "Home WiFi"
+  enabled                = true
+  security_type          = "WPA2_WPA3_PERSONAL"
+  passphrase_wo          = var.wifi_password
+  passphrase_wo_version  = 1  # increment when password changes
+  network_type           = "SPECIFIC"
+  network_id             = unifi_network.main.id
 }
 
 # IoT-optimized WiFi with client isolation
@@ -31,7 +32,8 @@ resource "unifi_wifi_broadcast" "iot" {
   name                     = "IoT Devices"
   enabled                  = true
   security_type            = "WPA2_PERSONAL"
-  passphrase               = var.iot_password
+  passphrase_wo            = var.iot_password
+  passphrase_wo_version    = 1
   network_type             = "SPECIFIC"
   network_id               = unifi_network.iot.id
   client_isolation_enabled = true
@@ -48,6 +50,14 @@ resource "unifi_wifi_broadcast" "guest" {
 }
 ```
 
+## Write-Only Passphrase
+
+This resource supports a write-only passphrase via `passphrase_wo` and `passphrase_wo_version`. When using these attributes, the passphrase value is **never stored** in the Terraform state or plan files — only the version number is persisted. This is the recommended approach for managing WiFi passwords.
+
+To rotate a passphrase, update the `passphrase_wo` value and increment `passphrase_wo_version`. Terraform detects the version change and re-applies the passphrase.
+
+~> **Note:** `passphrase_wo` requires Terraform 1.11 or later. For older versions, use the `passphrase` attribute instead.
+
 ## Schema
 
 ### Required
@@ -61,7 +71,9 @@ resource "unifi_wifi_broadcast" "guest" {
 
 ### Optional
 
-- `passphrase` (String, Sensitive) - WiFi passphrase. Required for personal security types.
+- `passphrase` (String, Sensitive) - WiFi passphrase. Required for personal security types. Must be 8–63 printable ASCII characters per IEEE 802.11i. **This value is stored in the Terraform state.** Conflicts with `passphrase_wo`.
+- `passphrase_wo` (String, Write-Only) - Write-only WiFi passphrase. Required for personal security types. Must be 8–63 printable ASCII characters per IEEE 802.11i. **This value is never stored in the Terraform state or plan files.** Use with `passphrase_wo_version`. Conflicts with `passphrase`. Requires Terraform >= 1.11.
+- `passphrase_wo_version` (Number) - An integer that tracks changes to `passphrase_wo`. Increment this value to signal that the passphrase has changed and should be re-applied.
 - `network_id` (String) - Network ID when `network_type` is `SPECIFIC`.
 - `client_isolation_enabled` (Boolean) - Whether client isolation is enabled. Defaults to `false`.
 - `hide_name` (Boolean) - Whether to hide the SSID name. Defaults to `false`.
