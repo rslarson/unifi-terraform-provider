@@ -71,9 +71,9 @@ const (
 
 // Firewall IP protocol scope types.
 const (
-	IPVersionIPv4       = "IPV4"
-	IPVersionIPv6       = "IPV6"
-	IPVersionIPv4AndV6  = "IPV4_AND_IPV6"
+	IPVersionIPv4      = "IPV4"
+	IPVersionIPv6      = "IPV6"
+	IPVersionIPv4AndV6 = "IPV4_AND_IPV6"
 )
 
 // DHCP configuration modes.
@@ -84,9 +84,9 @@ const (
 
 // Traffic matching list types.
 const (
-	TrafficMatchingPorts          = "PORTS"
-	TrafficMatchingIPv4Addresses  = "IPV4_ADDRESSES"
-	TrafficMatchingIPv6Addresses  = "IPV6_ADDRESSES"
+	TrafficMatchingPorts         = "PORTS"
+	TrafficMatchingIPv4Addresses = "IPV4_ADDRESSES"
+	TrafficMatchingIPv6Addresses = "IPV6_ADDRESSES"
 )
 
 // DNS policy types.
@@ -371,24 +371,24 @@ type DhcpGuarding struct {
 }
 
 type IPv4Config struct {
-	AutoScaleEnabled        bool              `json:"autoScaleEnabled"`
-	HostIPAddress           string            `json:"hostIpAddress"`
-	PrefixLength            int               `json:"prefixLength"`
-	AdditionalHostIPSubnets []string          `json:"additionalHostIpSubnets,omitempty"`
-	DhcpConfiguration       *DhcpConfig       `json:"dhcpConfiguration,omitempty"`
+	AutoScaleEnabled        bool                `json:"autoScaleEnabled"`
+	HostIPAddress           string              `json:"hostIpAddress"`
+	PrefixLength            int                 `json:"prefixLength"`
+	AdditionalHostIPSubnets []string            `json:"additionalHostIpSubnets,omitempty"`
+	DhcpConfiguration       *DhcpConfig         `json:"dhcpConfiguration,omitempty"`
 	NatOutboundIPConfig     []NatOutboundConfig `json:"natOutboundIpAddressConfiguration,omitempty"`
 }
 
 type DhcpConfig struct {
-	Mode               string     `json:"mode"`
+	Mode string `json:"mode"`
 	// Server mode fields.
-	IPAddressRange     *DhcpRange `json:"ipAddressRange,omitempty"`
-	GatewayIPOverride  string     `json:"gatewayIpAddressOverride,omitempty"`
-	DnsServerOverride  []string   `json:"dnsServerIpAddressesOverride,omitempty"`
-	LeaseTimeSeconds   *int       `json:"leaseTimeSeconds,omitempty"`
-	DomainName         string     `json:"domainName,omitempty"`
+	IPAddressRange    *DhcpRange `json:"ipAddressRange,omitempty"`
+	GatewayIPOverride string     `json:"gatewayIpAddressOverride,omitempty"`
+	DnsServerOverride []string   `json:"dnsServerIpAddressesOverride,omitempty"`
+	LeaseTimeSeconds  *int       `json:"leaseTimeSeconds,omitempty"`
+	DomainName        string     `json:"domainName,omitempty"`
 	// Relay mode fields.
-	ServerIPAddresses  []string   `json:"dhcpServerIpAddresses,omitempty"`
+	ServerIPAddresses []string `json:"dhcpServerIpAddresses,omitempty"`
 }
 
 type DhcpRange struct {
@@ -403,10 +403,10 @@ type NatOutboundConfig struct {
 
 type IPv6Config struct {
 	InterfaceType           string                   `json:"interfaceType"`
-	ClientAddressAssignment *IPv6ClientAssignment     `json:"clientAddressAssignment,omitempty"`
-	RouterAdvertisement     *IPv6RouterAdvertisement  `json:"routerAdvertisement,omitempty"`
-	DnsServerOverride       []string                  `json:"dnsServerIpAddressesOverride,omitempty"`
-	AdditionalHostIPSubnets []string                  `json:"additionalHostIpSubnets,omitempty"`
+	ClientAddressAssignment *IPv6ClientAssignment    `json:"clientAddressAssignment,omitempty"`
+	RouterAdvertisement     *IPv6RouterAdvertisement `json:"routerAdvertisement,omitempty"`
+	DnsServerOverride       []string                 `json:"dnsServerIpAddressesOverride,omitempty"`
+	AdditionalHostIPSubnets []string                 `json:"additionalHostIpSubnets,omitempty"`
 }
 
 type IPv6ClientAssignment struct {
@@ -453,27 +453,27 @@ func (c *Client) ListNetworks(ctx context.Context, siteID string) ([]Network, er
 // ============================================================================
 
 type WifiBroadcast struct {
-	ID                                  string                    `json:"id,omitempty"`
-	Type                                string                    `json:"type"`
-	Name                                string                    `json:"name"`
-	Enabled                             bool                      `json:"enabled"`
-	SecurityConfiguration               *SecurityConfiguration    `json:"securityConfiguration"`
-	Network                             *BroadcastNetwork         `json:"network"`
-	ClientIsolationEnabled              bool                      `json:"clientIsolationEnabled"`
-	HideName                            bool                      `json:"hideName"`
-	MulticastToUnicastConversionEnabled bool                      `json:"multicastToUnicastConversionEnabled"`
-	UapsdEnabled                        bool                      `json:"uapsdEnabled"`
-	Metadata                            *EntityMetadata           `json:"metadata,omitempty"`
+	ID                                  string                 `json:"id,omitempty"`
+	Type                                string                 `json:"type"`
+	Name                                string                 `json:"name"`
+	Enabled                             bool                   `json:"enabled"`
+	SecurityConfiguration               *SecurityConfiguration `json:"securityConfiguration"`
+	Network                             *BroadcastNetwork      `json:"network"`
+	ClientIsolationEnabled              bool                   `json:"clientIsolationEnabled"`
+	HideName                            bool                   `json:"hideName"`
+	MulticastToUnicastConversionEnabled bool                   `json:"multicastToUnicastConversionEnabled"`
+	UapsdEnabled                        bool                   `json:"uapsdEnabled"`
+	Metadata                            *EntityMetadata        `json:"metadata,omitempty"`
 
 	// Required fields added per API spec.
 	BasicDataRateKbps     *BasicDataRateKbps     `json:"basicDataRateKbpsByFrequencyGHz,omitempty"`
-	ClientFilteringPolicy *ClientFilteringPolicy  `json:"clientFilteringPolicy,omitempty"`
-	BlackoutSchedule      *BlackoutSchedule       `json:"blackoutScheduleConfiguration,omitempty"`
+	ClientFilteringPolicy *ClientFilteringPolicy `json:"clientFilteringPolicy,omitempty"`
+	BlackoutSchedule      *BlackoutSchedule      `json:"blackoutScheduleConfiguration,omitempty"`
 
 	// Optional shared fields.
-	BroadcastingDeviceFilter  *BroadcastingDeviceFilter  `json:"broadcastingDeviceFilter,omitempty"`
-	MulticastFilteringPolicy  *MulticastFilteringPolicy   `json:"multicastFilteringPolicy,omitempty"`
-	MdnsProxyConfiguration    *MdnsProxyConfiguration     `json:"mdnsProxyConfiguration,omitempty"`
+	BroadcastingDeviceFilter *BroadcastingDeviceFilter `json:"broadcastingDeviceFilter,omitempty"`
+	MulticastFilteringPolicy *MulticastFilteringPolicy `json:"multicastFilteringPolicy,omitempty"`
+	MdnsProxyConfiguration   *MdnsProxyConfiguration   `json:"mdnsProxyConfiguration,omitempty"`
 
 	// STANDARD type only fields.
 	BroadcastingFrequenciesGHz []float64 `json:"broadcastingFrequenciesGHz,omitempty"`
@@ -581,19 +581,19 @@ func (c *Client) DeleteFirewallZone(ctx context.Context, siteID, zoneID string) 
 // ============================================================================
 
 type FirewallPolicy struct {
-	ID                    string              `json:"id,omitempty"`
-	Enabled               bool                `json:"enabled"`
-	Name                  string              `json:"name"`
-	Description           string              `json:"description,omitempty"`
-	Action                *FirewallAction     `json:"action"`
-	Source                *FirewallEndpoint   `json:"source"`
-	Destination           *FirewallEndpoint   `json:"destination"`
-	IPProtocolScope       *IPProtocolScope    `json:"ipProtocolScope"`
-	ConnectionStateFilter []string            `json:"connectionStateFilter,omitempty"`
-	IpsecFilter           string              `json:"ipsecFilter,omitempty"`
-	LoggingEnabled        bool                `json:"loggingEnabled"`
-	Schedule              *FirewallSchedule   `json:"schedule,omitempty"`
-	Metadata              *EntityMetadata     `json:"metadata,omitempty"`
+	ID                    string            `json:"id,omitempty"`
+	Enabled               bool              `json:"enabled"`
+	Name                  string            `json:"name"`
+	Description           string            `json:"description,omitempty"`
+	Action                *FirewallAction   `json:"action"`
+	Source                *FirewallEndpoint `json:"source"`
+	Destination           *FirewallEndpoint `json:"destination"`
+	IPProtocolScope       *IPProtocolScope  `json:"ipProtocolScope"`
+	ConnectionStateFilter []string          `json:"connectionStateFilter,omitempty"`
+	IpsecFilter           string            `json:"ipsecFilter,omitempty"`
+	LoggingEnabled        bool              `json:"loggingEnabled"`
+	Schedule              *FirewallSchedule `json:"schedule,omitempty"`
+	Metadata              *EntityMetadata   `json:"metadata,omitempty"`
 }
 
 type FirewallAction struct {
@@ -602,15 +602,15 @@ type FirewallAction struct {
 }
 
 type FirewallEndpoint struct {
-	ZoneID        string                `json:"zoneId"`
+	ZoneID        string                 `json:"zoneId"`
 	TrafficFilter *FirewallTrafficFilter `json:"trafficFilter,omitempty"`
 }
 
 type FirewallTrafficFilter struct {
-	Type         string   `json:"type"`
-	NetworkID    string   `json:"networkId,omitempty"`
-	IPAddresses  []string `json:"ipAddresses,omitempty"`
-	MacAddresses []string `json:"macAddresses,omitempty"`
+	Type         string      `json:"type"`
+	NetworkID    string      `json:"networkId,omitempty"`
+	IPAddresses  []string    `json:"ipAddresses,omitempty"`
+	MacAddresses []string    `json:"macAddresses,omitempty"`
 	PortFilter   *PortFilter `json:"portFilter,omitempty"`
 }
 
@@ -628,8 +628,8 @@ type PortItem struct {
 }
 
 type IPProtocolScope struct {
-	IPVersion string                `json:"ipVersion"`
-	Protocol  *ProtocolFilter       `json:"protocol,omitempty"`
+	IPVersion string          `json:"ipVersion"`
+	Protocol  *ProtocolFilter `json:"protocol,omitempty"`
 }
 
 type ProtocolFilter struct {

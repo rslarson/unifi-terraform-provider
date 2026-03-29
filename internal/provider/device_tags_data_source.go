@@ -16,8 +16,8 @@ type DeviceTagsDataSource struct {
 }
 
 type DeviceTagsDataSourceModel struct {
-	SiteID     types.String          `tfsdk:"site_id"`
-	DeviceTags []DeviceTagItemModel  `tfsdk:"device_tags"`
+	SiteID     types.String         `tfsdk:"site_id"`
+	DeviceTags []DeviceTagItemModel `tfsdk:"device_tags"`
 }
 
 type DeviceTagItemModel struct {

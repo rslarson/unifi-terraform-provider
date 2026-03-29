@@ -64,36 +64,36 @@ func wifiBroadcastTestValues(overrides map[string]tftypes.Value) map[string]tfty
 		"start_time": tftypes.String, "end_time": tftypes.String,
 	}}
 	defaults := map[string]tftypes.Value{
-		"id":                                      tftypes.NewValue(tftypes.String, nil),
-		"site_id":                                 tftypes.NewValue(tftypes.String, "site-1"),
-		"type":                                    tftypes.NewValue(tftypes.String, "STANDARD"),
-		"name":                                    tftypes.NewValue(tftypes.String, "Test"),
-		"enabled":                                 tftypes.NewValue(tftypes.Bool, true),
-		"security_type":                           tftypes.NewValue(tftypes.String, nil),
-		"passphrase":                              tftypes.NewValue(tftypes.String, nil),
-		"passphrase_wo":                           tftypes.NewValue(tftypes.String, nil),
-		"passphrase_wo_version":                   tftypes.NewValue(tftypes.Number, nil),
-		"network_type":                            tftypes.NewValue(tftypes.String, "NATIVE"),
-		"network_id":                              tftypes.NewValue(tftypes.String, nil),
-		"client_isolation_enabled":                tftypes.NewValue(tftypes.Bool, false),
-		"hide_name":                               tftypes.NewValue(tftypes.Bool, false),
+		"id":                       tftypes.NewValue(tftypes.String, nil),
+		"site_id":                  tftypes.NewValue(tftypes.String, "site-1"),
+		"type":                     tftypes.NewValue(tftypes.String, "STANDARD"),
+		"name":                     tftypes.NewValue(tftypes.String, "Test"),
+		"enabled":                  tftypes.NewValue(tftypes.Bool, true),
+		"security_type":            tftypes.NewValue(tftypes.String, nil),
+		"passphrase":               tftypes.NewValue(tftypes.String, nil),
+		"passphrase_wo":            tftypes.NewValue(tftypes.String, nil),
+		"passphrase_wo_version":    tftypes.NewValue(tftypes.Number, nil),
+		"network_type":             tftypes.NewValue(tftypes.String, "NATIVE"),
+		"network_id":               tftypes.NewValue(tftypes.String, nil),
+		"client_isolation_enabled": tftypes.NewValue(tftypes.Bool, false),
+		"hide_name":                tftypes.NewValue(tftypes.Bool, false),
 		"multicast_to_unicast_conversion_enabled": tftypes.NewValue(tftypes.Bool, false),
-		"uapsd_enabled":                           tftypes.NewValue(tftypes.Bool, false),
-		"basic_data_rate_24ghz":                   tftypes.NewValue(tftypes.Number, nil),
-		"basic_data_rate_5ghz":                    tftypes.NewValue(tftypes.Number, nil),
-		"client_filter_action":                    tftypes.NewValue(tftypes.String, nil),
-		"client_filter_mac_addresses":             tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
-		"blackout_schedule_days":                  tftypes.NewValue(tftypes.List{ElementType: blackoutDayObjType}, nil),
-		"broadcasting_frequencies_ghz":            tftypes.NewValue(tftypes.List{ElementType: tftypes.Number}, nil),
-		"broadcasting_device_filter_type":         tftypes.NewValue(tftypes.String, nil),
-		"broadcasting_device_filter_ids":          tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
-		"multicast_filter_action":                 tftypes.NewValue(tftypes.String, nil),
-		"mdns_proxy_mode":                         tftypes.NewValue(tftypes.String, nil),
-		"band_steering_enabled":                   tftypes.NewValue(tftypes.Bool, nil),
-		"mlo_enabled":                             tftypes.NewValue(tftypes.Bool, nil),
-		"arp_proxy_enabled":                       tftypes.NewValue(tftypes.Bool, nil),
-		"bss_transition_enabled":                  tftypes.NewValue(tftypes.Bool, nil),
-		"advertise_device_name":                   tftypes.NewValue(tftypes.Bool, nil),
+		"uapsd_enabled":                   tftypes.NewValue(tftypes.Bool, false),
+		"basic_data_rate_24ghz":           tftypes.NewValue(tftypes.Number, nil),
+		"basic_data_rate_5ghz":            tftypes.NewValue(tftypes.Number, nil),
+		"client_filter_action":            tftypes.NewValue(tftypes.String, nil),
+		"client_filter_mac_addresses":     tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"blackout_schedule_days":          tftypes.NewValue(tftypes.List{ElementType: blackoutDayObjType}, nil),
+		"broadcasting_frequencies_ghz":    tftypes.NewValue(tftypes.List{ElementType: tftypes.Number}, nil),
+		"broadcasting_device_filter_type": tftypes.NewValue(tftypes.String, nil),
+		"broadcasting_device_filter_ids":  tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"multicast_filter_action":         tftypes.NewValue(tftypes.String, nil),
+		"mdns_proxy_mode":                 tftypes.NewValue(tftypes.String, nil),
+		"band_steering_enabled":           tftypes.NewValue(tftypes.Bool, nil),
+		"mlo_enabled":                     tftypes.NewValue(tftypes.Bool, nil),
+		"arp_proxy_enabled":               tftypes.NewValue(tftypes.Bool, nil),
+		"bss_transition_enabled":          tftypes.NewValue(tftypes.Bool, nil),
+		"advertise_device_name":           tftypes.NewValue(tftypes.Bool, nil),
 	}
 	for k, v := range overrides {
 		defaults[k] = v
@@ -265,9 +265,9 @@ func TestNetworkResourceReadNotFound(t *testing.T) {
 	nr.client = client.NewClientForTesting("key", "host", server.URL)
 
 	state := makeState(t, r, networkTestValues(map[string]tftypes.Value{
-		"id":         tftypes.NewValue(tftypes.String, "net-gone"),
-		"name":       tftypes.NewValue(tftypes.String, "gone"),
-		"vlan_id":    tftypes.NewValue(tftypes.Number, 10),
+		"id":      tftypes.NewValue(tftypes.String, "net-gone"),
+		"name":    tftypes.NewValue(tftypes.String, "gone"),
+		"vlan_id": tftypes.NewValue(tftypes.Number, 10),
 	}))
 
 	readResp := &resource.ReadResponse{State: state}
@@ -397,9 +397,9 @@ func TestFirewallZoneResourceCreate(t *testing.T) {
 	fzr.client = client.NewClientForTesting("key", "host", server.URL)
 
 	plan := makePlan(t, r, map[string]tftypes.Value{
-		"id":          tftypes.NewValue(tftypes.String, nil),
-		"site_id":     tftypes.NewValue(tftypes.String, "site-1"),
-		"name":        tftypes.NewValue(tftypes.String, "New Zone"),
+		"id":      tftypes.NewValue(tftypes.String, nil),
+		"site_id": tftypes.NewValue(tftypes.String, "site-1"),
+		"name":    tftypes.NewValue(tftypes.String, "New Zone"),
 		"network_ids": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, []tftypes.Value{
 			tftypes.NewValue(tftypes.String, "net-1"),
 			tftypes.NewValue(tftypes.String, "net-2"),
@@ -642,22 +642,22 @@ func TestWifiBroadcastResourceDelete(t *testing.T) {
 // tftypes values for an AclRule resource.
 func aclRuleTestValues(overrides map[string]tftypes.Value) map[string]tftypes.Value {
 	defaults := map[string]tftypes.Value{
-		"id":                       tftypes.NewValue(tftypes.String, nil),
-		"site_id":                  tftypes.NewValue(tftypes.String, "site-1"),
-		"type":                     tftypes.NewValue(tftypes.String, "IPV4"),
-		"enabled":                  tftypes.NewValue(tftypes.Bool, true),
-		"name":                     tftypes.NewValue(tftypes.String, "Test ACL"),
-		"description":              tftypes.NewValue(tftypes.String, nil),
-		"action":                   tftypes.NewValue(tftypes.String, "ALLOW"),
-		"source_filter_type":       tftypes.NewValue(tftypes.String, nil),
-		"source_filter_values":     tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
-		"source_filter_ports":      tftypes.NewValue(tftypes.List{ElementType: tftypes.Number}, nil),
-		"destination_filter_type":  tftypes.NewValue(tftypes.String, nil),
+		"id":                        tftypes.NewValue(tftypes.String, nil),
+		"site_id":                   tftypes.NewValue(tftypes.String, "site-1"),
+		"type":                      tftypes.NewValue(tftypes.String, "IPV4"),
+		"enabled":                   tftypes.NewValue(tftypes.Bool, true),
+		"name":                      tftypes.NewValue(tftypes.String, "Test ACL"),
+		"description":               tftypes.NewValue(tftypes.String, nil),
+		"action":                    tftypes.NewValue(tftypes.String, "ALLOW"),
+		"source_filter_type":        tftypes.NewValue(tftypes.String, nil),
+		"source_filter_values":      tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"source_filter_ports":       tftypes.NewValue(tftypes.List{ElementType: tftypes.Number}, nil),
+		"destination_filter_type":   tftypes.NewValue(tftypes.String, nil),
 		"destination_filter_values": tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
-		"destination_filter_ports": tftypes.NewValue(tftypes.List{ElementType: tftypes.Number}, nil),
-		"protocol_filter":          tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
-		"enforcing_device_ids":     tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
-		"network_id_filter":        tftypes.NewValue(tftypes.String, nil),
+		"destination_filter_ports":  tftypes.NewValue(tftypes.List{ElementType: tftypes.Number}, nil),
+		"protocol_filter":           tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"enforcing_device_ids":      tftypes.NewValue(tftypes.List{ElementType: tftypes.String}, nil),
+		"network_id_filter":         tftypes.NewValue(tftypes.String, nil),
 	}
 	for k, v := range overrides {
 		defaults[k] = v
@@ -818,14 +818,14 @@ func TestFirewallPolicyResourceCreate(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(client.FirewallPolicy{
-			ID:      "policy-created",
-			Enabled: true,
-			Name:    "Block WAN",
-			Action:  &client.FirewallAction{Type: "BLOCK"},
-			Source:  &client.FirewallEndpoint{ZoneID: "zone-src"},
-			Destination: &client.FirewallEndpoint{ZoneID: "zone-dst"},
+			ID:              "policy-created",
+			Enabled:         true,
+			Name:            "Block WAN",
+			Action:          &client.FirewallAction{Type: "BLOCK"},
+			Source:          &client.FirewallEndpoint{ZoneID: "zone-src"},
+			Destination:     &client.FirewallEndpoint{ZoneID: "zone-dst"},
 			IPProtocolScope: &client.IPProtocolScope{IPVersion: "IPV4"},
-			LoggingEnabled: true,
+			LoggingEnabled:  true,
 		}); err != nil {
 			t.Fatalf("encode error: %v", err)
 		}

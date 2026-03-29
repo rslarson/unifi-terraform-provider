@@ -8,9 +8,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
-	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
 	"github.com/rslarson/terraform-provider-unifi/internal/client"
 )
 
@@ -345,7 +345,6 @@ func optionalStringToTF(s string) types.String {
 	}
 	return types.StringValue(s)
 }
-
 
 // wifiBroadcastAPIToModel maps a client.WifiBroadcast to common Terraform model fields.
 // It populates the provided WifiBroadcastResourceModel in place.

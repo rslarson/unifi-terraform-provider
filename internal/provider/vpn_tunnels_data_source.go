@@ -16,8 +16,8 @@ type VpnTunnelsDataSource struct {
 }
 
 type VpnTunnelsDataSourceModel struct {
-	SiteID     types.String          `tfsdk:"site_id"`
-	VpnTunnels []VpnTunnelItemModel  `tfsdk:"vpn_tunnels"`
+	SiteID     types.String         `tfsdk:"site_id"`
+	VpnTunnels []VpnTunnelItemModel `tfsdk:"vpn_tunnels"`
 }
 
 type VpnTunnelItemModel struct {

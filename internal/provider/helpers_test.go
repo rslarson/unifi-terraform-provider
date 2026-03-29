@@ -291,9 +291,9 @@ func TestWifiBroadcastAPIToModelComplete(t *testing.T) {
 
 func TestWifiBroadcastAPIToModelNativeNetwork(t *testing.T) {
 	wb := &client.WifiBroadcast{
-		Type:    client.BroadcastTypeIoTOptimized,
-		Name:    "IoT",
-		Enabled: false,
+		Type:                  client.BroadcastTypeIoTOptimized,
+		Name:                  "IoT",
+		Enabled:               false,
 		SecurityConfiguration: &client.SecurityConfiguration{Type: client.SecurityOpen},
 		Network:               &client.BroadcastNetwork{Type: client.NetworkTypeNative},
 	}

@@ -24,22 +24,22 @@ type AclRuleResource struct {
 }
 
 type AclRuleResourceModel struct {
-	ID                    types.String `tfsdk:"id"`
-	SiteID                types.String `tfsdk:"site_id"`
-	Type                  types.String `tfsdk:"type"`
-	Enabled               types.Bool   `tfsdk:"enabled"`
-	Name                  types.String `tfsdk:"name"`
-	Description           types.String `tfsdk:"description"`
-	Action                types.String `tfsdk:"action"`
-	SourceFilterType      types.String `tfsdk:"source_filter_type"`
-	SourceFilterValues    types.List   `tfsdk:"source_filter_values"`
-	SourceFilterPorts     types.List   `tfsdk:"source_filter_ports"`
+	ID                      types.String `tfsdk:"id"`
+	SiteID                  types.String `tfsdk:"site_id"`
+	Type                    types.String `tfsdk:"type"`
+	Enabled                 types.Bool   `tfsdk:"enabled"`
+	Name                    types.String `tfsdk:"name"`
+	Description             types.String `tfsdk:"description"`
+	Action                  types.String `tfsdk:"action"`
+	SourceFilterType        types.String `tfsdk:"source_filter_type"`
+	SourceFilterValues      types.List   `tfsdk:"source_filter_values"`
+	SourceFilterPorts       types.List   `tfsdk:"source_filter_ports"`
 	DestinationFilterType   types.String `tfsdk:"destination_filter_type"`
 	DestinationFilterValues types.List   `tfsdk:"destination_filter_values"`
 	DestinationFilterPorts  types.List   `tfsdk:"destination_filter_ports"`
-	ProtocolFilter        types.List   `tfsdk:"protocol_filter"`
-	EnforcingDeviceIDs    types.List   `tfsdk:"enforcing_device_ids"`
-	NetworkIDFilter       types.String `tfsdk:"network_id_filter"`
+	ProtocolFilter          types.List   `tfsdk:"protocol_filter"`
+	EnforcingDeviceIDs      types.List   `tfsdk:"enforcing_device_ids"`
+	NetworkIDFilter         types.String `tfsdk:"network_id_filter"`
 }
 
 func NewAclRuleResource() resource.Resource {

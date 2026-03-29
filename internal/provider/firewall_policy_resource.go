@@ -24,23 +24,23 @@ type FirewallPolicyResource struct {
 }
 
 type FirewallPolicyResourceModel struct {
-	ID                          types.String `tfsdk:"id"`
-	SiteID                      types.String `tfsdk:"site_id"`
-	Enabled                     types.Bool   `tfsdk:"enabled"`
-	Name                        types.String `tfsdk:"name"`
-	Description                 types.String `tfsdk:"description"`
-	ActionType                  types.String `tfsdk:"action_type"`
-	AllowReturnTraffic          types.Bool   `tfsdk:"allow_return_traffic"`
-	SourceZoneID                types.String `tfsdk:"source_zone_id"`
-	SourceTrafficFilterType     types.String `tfsdk:"source_traffic_filter_type"`
-	SourceTrafficFilterValues   types.List   `tfsdk:"source_traffic_filter_values"`
-	DestinationZoneID           types.String `tfsdk:"destination_zone_id"`
+	ID                             types.String `tfsdk:"id"`
+	SiteID                         types.String `tfsdk:"site_id"`
+	Enabled                        types.Bool   `tfsdk:"enabled"`
+	Name                           types.String `tfsdk:"name"`
+	Description                    types.String `tfsdk:"description"`
+	ActionType                     types.String `tfsdk:"action_type"`
+	AllowReturnTraffic             types.Bool   `tfsdk:"allow_return_traffic"`
+	SourceZoneID                   types.String `tfsdk:"source_zone_id"`
+	SourceTrafficFilterType        types.String `tfsdk:"source_traffic_filter_type"`
+	SourceTrafficFilterValues      types.List   `tfsdk:"source_traffic_filter_values"`
+	DestinationZoneID              types.String `tfsdk:"destination_zone_id"`
 	DestinationTrafficFilterType   types.String `tfsdk:"destination_traffic_filter_type"`
 	DestinationTrafficFilterValues types.List   `tfsdk:"destination_traffic_filter_values"`
-	IPVersion                   types.String `tfsdk:"ip_version"`
-	ConnectionStateFilter       types.List   `tfsdk:"connection_state_filter"`
-	IpsecFilter                 types.String `tfsdk:"ipsec_filter"`
-	LoggingEnabled              types.Bool   `tfsdk:"logging_enabled"`
+	IPVersion                      types.String `tfsdk:"ip_version"`
+	ConnectionStateFilter          types.List   `tfsdk:"connection_state_filter"`
+	IpsecFilter                    types.String `tfsdk:"ipsec_filter"`
+	LoggingEnabled                 types.Bool   `tfsdk:"logging_enabled"`
 }
 
 func NewFirewallPolicyResource() resource.Resource {

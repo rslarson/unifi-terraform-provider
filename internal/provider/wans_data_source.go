@@ -16,7 +16,7 @@ type WansDataSource struct {
 }
 
 type WansDataSourceModel struct {
-	SiteID types.String  `tfsdk:"site_id"`
+	SiteID types.String   `tfsdk:"site_id"`
 	Wans   []WanItemModel `tfsdk:"wans"`
 }
 

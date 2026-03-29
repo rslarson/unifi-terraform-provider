@@ -16,8 +16,8 @@ type ClientsDataSource struct {
 }
 
 type ClientsDataSourceModel struct {
-	SiteID  types.String       `tfsdk:"site_id"`
-	Clients []ClientItemModel  `tfsdk:"clients"`
+	SiteID  types.String      `tfsdk:"site_id"`
+	Clients []ClientItemModel `tfsdk:"clients"`
 }
 
 type ClientItemModel struct {

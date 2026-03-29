@@ -453,10 +453,10 @@ func TestGetWifiBroadcast(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(WifiBroadcast{
-			ID:      "wifi-456",
-			Type:    BroadcastTypeIoTOptimized,
-			Name:    "IoT Network",
-			Enabled: true,
+			ID:                    "wifi-456",
+			Type:                  BroadcastTypeIoTOptimized,
+			Name:                  "IoT Network",
+			Enabled:               true,
 			SecurityConfiguration: &SecurityConfiguration{Type: SecurityOpen},
 			Network:               &BroadcastNetwork{Type: NetworkTypeNative},
 		}); err != nil {
@@ -500,9 +500,9 @@ func TestUpdateWifiBroadcast(t *testing.T) {
 
 	c := NewClientForTesting("key", "host", server.URL)
 	result, err := c.UpdateWifiBroadcast(context.Background(), "site-1", "wifi-123", &WifiBroadcast{
-		Type:    BroadcastTypeStandard,
-		Name:    "Updated SSID",
-		Enabled: false,
+		Type:                  BroadcastTypeStandard,
+		Name:                  "Updated SSID",
+		Enabled:               false,
 		SecurityConfiguration: &SecurityConfiguration{Type: SecurityOpen},
 		Network:               &BroadcastNetwork{Type: NetworkTypeNative},
 	})
@@ -1167,11 +1167,11 @@ func TestCreateAclRule(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(AclRule{
-			ID:      "acl-123",
-			Type:    req.Type,
-			Enabled: req.Enabled,
-			Name:    req.Name,
-			Action:  req.Action,
+			ID:           "acl-123",
+			Type:         req.Type,
+			Enabled:      req.Enabled,
+			Name:         req.Name,
+			Action:       req.Action,
 			SourceFilter: req.SourceFilter,
 		}); err != nil {
 			t.Fatalf("encode error: %v", err)
@@ -1186,7 +1186,7 @@ func TestCreateAclRule(t *testing.T) {
 		Name:    "Block IoT",
 		Action:  ActionBlock,
 		SourceFilter: &AclFilter{
-			Type:       "IP_ADDRESS",
+			Type:                 "IP_ADDRESS",
 			IPAddressesOrSubnets: []string{"192.168.10.0/24"},
 		},
 	})
@@ -1369,12 +1369,12 @@ func TestCreateFirewallPolicy(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(FirewallPolicy{
-			ID:      "pol-123",
-			Enabled: req.Enabled,
-			Name:    req.Name,
-			Action:  req.Action,
-			Source:  req.Source,
-			Destination: req.Destination,
+			ID:              "pol-123",
+			Enabled:         req.Enabled,
+			Name:            req.Name,
+			Action:          req.Action,
+			Source:          req.Source,
+			Destination:     req.Destination,
 			IPProtocolScope: req.IPProtocolScope,
 		}); err != nil {
 			t.Fatalf("encode error: %v", err)
@@ -1384,11 +1384,11 @@ func TestCreateFirewallPolicy(t *testing.T) {
 
 	c := NewClientForTesting("test-key", "host-id", server.URL)
 	result, err := c.CreateFirewallPolicy(context.Background(), "site-1", &FirewallPolicy{
-		Enabled: true,
-		Name:    "Block Outbound",
-		Action:  &FirewallAction{Type: ActionBlock},
-		Source:  &FirewallEndpoint{ZoneID: "zone-lan"},
-		Destination: &FirewallEndpoint{ZoneID: "zone-wan"},
+		Enabled:         true,
+		Name:            "Block Outbound",
+		Action:          &FirewallAction{Type: ActionBlock},
+		Source:          &FirewallEndpoint{ZoneID: "zone-lan"},
+		Destination:     &FirewallEndpoint{ZoneID: "zone-wan"},
 		IPProtocolScope: &IPProtocolScope{IPVersion: IPVersionIPv4},
 	})
 	if err != nil {
@@ -1478,11 +1478,11 @@ func TestUpdateFirewallPolicy(t *testing.T) {
 
 	c := NewClientForTesting("key", "host", server.URL)
 	result, err := c.UpdateFirewallPolicy(context.Background(), "site-1", "pol-123", &FirewallPolicy{
-		Enabled: false,
-		Name:    "Updated Policy",
-		Action:  &FirewallAction{Type: ActionReject},
-		Source:  &FirewallEndpoint{ZoneID: "zone-lan"},
-		Destination: &FirewallEndpoint{ZoneID: "zone-wan"},
+		Enabled:         false,
+		Name:            "Updated Policy",
+		Action:          &FirewallAction{Type: ActionReject},
+		Source:          &FirewallEndpoint{ZoneID: "zone-lan"},
+		Destination:     &FirewallEndpoint{ZoneID: "zone-wan"},
 		IPProtocolScope: &IPProtocolScope{IPVersion: IPVersionIPv6},
 	})
 	if err != nil {
@@ -1748,13 +1748,13 @@ func TestGetDnsPolicy(t *testing.T) {
 		ttl := 600
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(DnsPolicy{
-			ID:          "dns-456",
-			Type:        DnsPolicyForwardDomain,
-			Enabled:     true,
-			Name:        "Forward Corp",
-			Domain:      "corp.example.com",
-			ForwardTo:   []string{"8.8.8.8", "8.8.4.4"},
-			TTLSeconds:  &ttl,
+			ID:         "dns-456",
+			Type:       DnsPolicyForwardDomain,
+			Enabled:    true,
+			Name:       "Forward Corp",
+			Domain:     "corp.example.com",
+			ForwardTo:  []string{"8.8.8.8", "8.8.4.4"},
+			TTLSeconds: &ttl,
 		}); err != nil {
 			t.Fatalf("encode error: %v", err)
 		}
@@ -1802,11 +1802,11 @@ func TestUpdateDnsPolicy(t *testing.T) {
 
 	c := NewClientForTesting("key", "host", server.URL)
 	result, err := c.UpdateDnsPolicy(context.Background(), "site-1", "dns-123", &DnsPolicy{
-		Type:        DnsPolicyCNAMERecord,
-		Enabled:     true,
-		Name:        "Updated CNAME",
-		Domain:      "alias.example.com",
-		Target:      "real.example.com",
+		Type:    DnsPolicyCNAMERecord,
+		Enabled: true,
+		Name:    "Updated CNAME",
+		Domain:  "alias.example.com",
+		Target:  "real.example.com",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
