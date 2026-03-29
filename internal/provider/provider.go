@@ -96,6 +96,11 @@ func (p *UnifiProvider) Resources(_ context.Context) []func() resource.Resource 
 		NewNetworkResource,
 		NewWifiBroadcastResource,
 		NewFirewallZoneResource,
+		NewAclRuleResource,
+		NewFirewallPolicyResource,
+		NewTrafficMatchingListResource,
+		NewDnsPolicyResource,
+		NewHotspotVoucherResource,
 	}
 }
 
@@ -106,5 +111,18 @@ func (p *UnifiProvider) DataSources(_ context.Context) []func() datasource.DataS
 		NewFirewallZoneDataSource,
 		NewDeviceDataSource,
 		NewSitesDataSource,
+		NewAclRuleDataSource,
+		NewFirewallPolicyDataSource,
+		NewTrafficMatchingListDataSource,
+		NewDnsPolicyDataSource,
+		NewClientsDataSource,
+		NewWansDataSource,
+		NewVpnServersDataSource,
+		NewVpnTunnelsDataSource,
+		NewRadiusProfilesDataSource,
+		NewDeviceTagsDataSource,
+		NewPendingDevicesDataSource,
+		NewDpiCategoriesDataSource,
+		NewDpiApplicationsDataSource,
 	}
 }

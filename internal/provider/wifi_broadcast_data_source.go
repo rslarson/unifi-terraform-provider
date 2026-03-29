@@ -28,6 +28,21 @@ type WifiBroadcastDataSourceModel struct {
 	HideName                            types.Bool   `tfsdk:"hide_name"`
 	MulticastToUnicastConversionEnabled types.Bool   `tfsdk:"multicast_to_unicast_conversion_enabled"`
 	UapsdEnabled                        types.Bool   `tfsdk:"uapsd_enabled"`
+	BasicDataRateGHz24                  types.Int64  `tfsdk:"basic_data_rate_24ghz"`
+	BasicDataRateGHz5                   types.Int64  `tfsdk:"basic_data_rate_5ghz"`
+	ClientFilterAction                  types.String `tfsdk:"client_filter_action"`
+	ClientFilterMacAddresses            types.List   `tfsdk:"client_filter_mac_addresses"`
+	BlackoutScheduleDays                types.List   `tfsdk:"blackout_schedule_days"`
+	BroadcastingFrequenciesGHz          types.List   `tfsdk:"broadcasting_frequencies_ghz"`
+	BroadcastingDeviceFilterType        types.String `tfsdk:"broadcasting_device_filter_type"`
+	BroadcastingDeviceFilterIds         types.List   `tfsdk:"broadcasting_device_filter_ids"`
+	MulticastFilterAction               types.String `tfsdk:"multicast_filter_action"`
+	MdnsProxyMode                       types.String `tfsdk:"mdns_proxy_mode"`
+	BandSteeringEnabled                 types.Bool   `tfsdk:"band_steering_enabled"`
+	MloEnabled                          types.Bool   `tfsdk:"mlo_enabled"`
+	ArpProxyEnabled                     types.Bool   `tfsdk:"arp_proxy_enabled"`
+	BssTransitionEnabled                types.Bool   `tfsdk:"bss_transition_enabled"`
+	AdvertiseDeviceName                 types.Bool   `tfsdk:"advertise_device_name"`
 }
 
 func NewWifiBroadcastDataSource() datasource.DataSource {
@@ -90,6 +105,89 @@ func (d *WifiBroadcastDataSource) Schema(_ context.Context, _ datasource.SchemaR
 				Description: "Whether U-APSD is enabled.",
 				Computed:    true,
 			},
+			"basic_data_rate_24ghz": schema.Int64Attribute{
+				Description: "Basic data rate for 2.4 GHz in Kbps.",
+				Computed:    true,
+			},
+			"basic_data_rate_5ghz": schema.Int64Attribute{
+				Description: "Basic data rate for 5 GHz in Kbps.",
+				Computed:    true,
+			},
+			"client_filter_action": schema.StringAttribute{
+				Description: "Client filtering policy action.",
+				Computed:    true,
+			},
+			"client_filter_mac_addresses": schema.ListAttribute{
+				Description: "List of MAC addresses for the client filtering policy.",
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"blackout_schedule_days": schema.ListNestedAttribute{
+				Description: "Blackout schedule configuration days.",
+				Computed:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"type": schema.StringAttribute{
+							Description: "Schedule type: ALL_DAY or TIME_RANGE.",
+							Computed:    true,
+						},
+						"day": schema.StringAttribute{
+							Description: "Day of week.",
+							Computed:    true,
+						},
+						"start_time": schema.StringAttribute{
+							Description: "Start time in HH:mm format.",
+							Computed:    true,
+						},
+						"end_time": schema.StringAttribute{
+							Description: "End time in HH:mm format.",
+							Computed:    true,
+						},
+					},
+				},
+			},
+			"broadcasting_frequencies_ghz": schema.ListAttribute{
+				Description: "Broadcasting frequencies in GHz.",
+				Computed:    true,
+				ElementType: types.Float64Type,
+			},
+			"broadcasting_device_filter_type": schema.StringAttribute{
+				Description: "Broadcasting device filter type.",
+				Computed:    true,
+			},
+			"broadcasting_device_filter_ids": schema.ListAttribute{
+				Description: "List of device or device tag IDs for the broadcasting device filter.",
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"multicast_filter_action": schema.StringAttribute{
+				Description: "Multicast filtering policy action.",
+				Computed:    true,
+			},
+			"mdns_proxy_mode": schema.StringAttribute{
+				Description: "mDNS proxy configuration mode.",
+				Computed:    true,
+			},
+			"band_steering_enabled": schema.BoolAttribute{
+				Description: "Whether band steering is enabled.",
+				Computed:    true,
+			},
+			"mlo_enabled": schema.BoolAttribute{
+				Description: "Whether MLO (Multi-Link Operation) is enabled.",
+				Computed:    true,
+			},
+			"arp_proxy_enabled": schema.BoolAttribute{
+				Description: "Whether ARP proxy is enabled.",
+				Computed:    true,
+			},
+			"bss_transition_enabled": schema.BoolAttribute{
+				Description: "Whether BSS transition (802.11v) is enabled.",
+				Computed:    true,
+			},
+			"advertise_device_name": schema.BoolAttribute{
+				Description: "Whether to advertise the device name.",
+				Computed:    true,
+			},
 		},
 	}
 }
@@ -115,9 +213,7 @@ func (d *WifiBroadcastDataSource) Read(ctx context.Context, req datasource.ReadR
 		return
 	}
 
-	config.Type, config.Name, config.Enabled, config.ClientIsolationEnabled, config.HideName,
-		config.MulticastToUnicastConversionEnabled, config.UapsdEnabled,
-		config.SecurityType, config.NetworkType, config.NetworkID = wifiBroadcastAPIToModel(result)
+	resp.Diagnostics.Append(wifiBroadcastAPIToDataSourceModel(ctx, &config, result)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, config)...)
 }

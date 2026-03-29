@@ -157,7 +157,7 @@ func TestProviderResources(t *testing.T) {
 	p := New("test")()
 	resources := p.(*UnifiProvider).Resources(context.Background())
 
-	expectedCount := 3 // network, wifi_broadcast, firewall_zone
+	expectedCount := 8 // network, wifi_broadcast, firewall_zone, acl_rule, firewall_policy, traffic_matching_list, dns_policy, hotspot_voucher
 	if len(resources) != expectedCount {
 		t.Errorf("expected %d resources, got %d", expectedCount, len(resources))
 	}
@@ -167,7 +167,7 @@ func TestProviderDataSources(t *testing.T) {
 	p := New("test")()
 	dataSources := p.(*UnifiProvider).DataSources(context.Background())
 
-	expectedCount := 5 // network, wifi_broadcast, firewall_zone, device, sites
+	expectedCount := 18 // network, wifi_broadcast, firewall_zone, device, sites, acl_rule, firewall_policy, traffic_matching_list, dns_policy, clients, wans, vpn_servers, vpn_tunnels, radius_profiles, device_tags, pending_devices, dpi_categories, dpi_applications
 	if len(dataSources) != expectedCount {
 		t.Errorf("expected %d data sources, got %d", expectedCount, len(dataSources))
 	}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"regexp"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -57,6 +59,39 @@ type WifiBroadcastResourceModel struct {
 	HideName                            types.Bool   `tfsdk:"hide_name"`
 	MulticastToUnicastConversionEnabled types.Bool   `tfsdk:"multicast_to_unicast_conversion_enabled"`
 	UapsdEnabled                        types.Bool   `tfsdk:"uapsd_enabled"`
+	BasicDataRateGHz24                  types.Int64  `tfsdk:"basic_data_rate_24ghz"`
+	BasicDataRateGHz5                   types.Int64  `tfsdk:"basic_data_rate_5ghz"`
+	ClientFilterAction                  types.String `tfsdk:"client_filter_action"`
+	ClientFilterMacAddresses            types.List   `tfsdk:"client_filter_mac_addresses"`
+	BlackoutScheduleDays                types.List   `tfsdk:"blackout_schedule_days"`
+	BroadcastingFrequenciesGHz          types.List   `tfsdk:"broadcasting_frequencies_ghz"`
+	BroadcastingDeviceFilterType        types.String `tfsdk:"broadcasting_device_filter_type"`
+	BroadcastingDeviceFilterIds         types.List   `tfsdk:"broadcasting_device_filter_ids"`
+	MulticastFilterAction               types.String `tfsdk:"multicast_filter_action"`
+	MdnsProxyMode                       types.String `tfsdk:"mdns_proxy_mode"`
+	BandSteeringEnabled                 types.Bool   `tfsdk:"band_steering_enabled"`
+	MloEnabled                          types.Bool   `tfsdk:"mlo_enabled"`
+	ArpProxyEnabled                     types.Bool   `tfsdk:"arp_proxy_enabled"`
+	BssTransitionEnabled                types.Bool   `tfsdk:"bss_transition_enabled"`
+	AdvertiseDeviceName                 types.Bool   `tfsdk:"advertise_device_name"`
+}
+
+// BlackoutScheduleDayModel represents a single blackout schedule day entry.
+type BlackoutScheduleDayModel struct {
+	Type      types.String `tfsdk:"type"`
+	Day       types.String `tfsdk:"day"`
+	StartTime types.String `tfsdk:"start_time"`
+	EndTime   types.String `tfsdk:"end_time"`
+}
+
+// blackoutScheduleDayAttrTypes returns the attribute types for the blackout_schedule_days nested object.
+func blackoutScheduleDayAttrTypes() map[string]attr.Type {
+	return map[string]attr.Type{
+		"type":       types.StringType,
+		"day":        types.StringType,
+		"start_time": types.StringType,
+		"end_time":   types.StringType,
+	}
 }
 
 func NewWifiBroadcastResource() resource.Resource {
@@ -162,6 +197,126 @@ func (r *WifiBroadcastResource) Schema(_ context.Context, _ resource.SchemaReque
 				Computed:    true,
 				Default:     booldefault.StaticBool(false),
 			},
+			"basic_data_rate_24ghz": schema.Int64Attribute{
+				Description: "Basic data rate for 2.4 GHz in Kbps. Valid values: 1000, 2000, 5500, 6000, 9000, 11000, 12000, 24000.",
+				Optional:    true,
+				Computed:    true,
+				Validators: []validator.Int64{
+					int64validator.OneOf(1000, 2000, 5500, 6000, 9000, 11000, 12000, 24000),
+				},
+			},
+			"basic_data_rate_5ghz": schema.Int64Attribute{
+				Description: "Basic data rate for 5 GHz in Kbps. Valid values: 6000, 9000, 12000, 24000.",
+				Optional:    true,
+				Computed:    true,
+				Validators: []validator.Int64{
+					int64validator.OneOf(6000, 9000, 12000, 24000),
+				},
+			},
+			"client_filter_action": schema.StringAttribute{
+				Description: "Client filtering policy action: ALLOW or BLOCK.",
+				Optional:    true,
+				Computed:    true,
+				Validators: []validator.String{
+					stringvalidator.OneOf(client.FilterActionAllow, client.FilterActionBlock),
+				},
+			},
+			"client_filter_mac_addresses": schema.ListAttribute{
+				Description: "List of MAC addresses for the client filtering policy.",
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.StringType,
+			},
+			"blackout_schedule_days": schema.ListNestedAttribute{
+				Description: "Blackout schedule configuration days.",
+				Optional:    true,
+				Computed:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"type": schema.StringAttribute{
+							Description: "Schedule type: ALL_DAY or TIME_RANGE.",
+							Required:    true,
+							Validators: []validator.String{
+								stringvalidator.OneOf(client.BlackoutAllDay, client.BlackoutTimeRange),
+							},
+						},
+						"day": schema.StringAttribute{
+							Description: "Day of week: SUN, MON, TUE, WED, THU, FRI, SAT.",
+							Required:    true,
+							Validators: []validator.String{
+								stringvalidator.OneOf("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"),
+							},
+						},
+						"start_time": schema.StringAttribute{
+							Description: "Start time in HH:mm format. Required when type is TIME_RANGE.",
+							Optional:    true,
+						},
+						"end_time": schema.StringAttribute{
+							Description: "End time in HH:mm format. Required when type is TIME_RANGE.",
+							Optional:    true,
+						},
+					},
+				},
+			},
+			"broadcasting_frequencies_ghz": schema.ListAttribute{
+				Description: "Broadcasting frequencies in GHz. STANDARD type only. Valid values: 2.4, 5, 6.",
+				Optional:    true,
+				Computed:    true,
+				ElementType: types.Float64Type,
+			},
+			"broadcasting_device_filter_type": schema.StringAttribute{
+				Description: "Broadcasting device filter type: DEVICES or DEVICE_TAGS.",
+				Optional:    true,
+				Validators: []validator.String{
+					stringvalidator.OneOf(client.DeviceFilterDevices, client.DeviceFilterDeviceTags),
+				},
+			},
+			"broadcasting_device_filter_ids": schema.ListAttribute{
+				Description: "List of device IDs or device tag IDs for the broadcasting device filter.",
+				Optional:    true,
+				ElementType: types.StringType,
+			},
+			"multicast_filter_action": schema.StringAttribute{
+				Description: "Multicast filtering policy action: ALLOW or BLOCK.",
+				Optional:    true,
+				Computed:    true,
+				Validators: []validator.String{
+					stringvalidator.OneOf(client.FilterActionAllow, client.FilterActionBlock),
+				},
+			},
+			"mdns_proxy_mode": schema.StringAttribute{
+				Description: "mDNS proxy configuration mode: AUTO or CUSTOM.",
+				Optional:    true,
+				Computed:    true,
+				Validators: []validator.String{
+					stringvalidator.OneOf(client.MdnsProxyAuto, client.MdnsProxyCustom),
+				},
+			},
+			"band_steering_enabled": schema.BoolAttribute{
+				Description: "Whether band steering is enabled. STANDARD type only.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"mlo_enabled": schema.BoolAttribute{
+				Description: "Whether MLO (Multi-Link Operation) is enabled. STANDARD type only.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"arp_proxy_enabled": schema.BoolAttribute{
+				Description: "Whether ARP proxy is enabled. STANDARD type only.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"bss_transition_enabled": schema.BoolAttribute{
+				Description: "Whether BSS transition (802.11v) is enabled. STANDARD type only.",
+				Optional:    true,
+				Computed:    true,
+			},
+			"advertise_device_name": schema.BoolAttribute{
+				Description: "Whether to advertise the device name. STANDARD type only.",
+				Optional:    true,
+				Computed:    true,
+			},
 		},
 	}
 }
@@ -227,7 +382,11 @@ func (r *WifiBroadcastResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	broadcast := wifiBroadcastModelToAPI(plan, passphraseWO)
+	broadcast, diags := wifiBroadcastModelToAPI(ctx, plan, passphraseWO)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	result, err := r.client.CreateWifiBroadcast(ctx, plan.SiteID.ValueString(), broadcast)
 	if err != nil {
@@ -236,9 +395,7 @@ func (r *WifiBroadcastResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	plan.ID = types.StringValue(result.ID)
-	plan.Type, plan.Name, plan.Enabled, plan.ClientIsolationEnabled, plan.HideName,
-		plan.MulticastToUnicastConversionEnabled, plan.UapsdEnabled,
-		plan.SecurityType, plan.NetworkType, plan.NetworkID = wifiBroadcastAPIToModel(result)
+	resp.Diagnostics.Append(wifiBroadcastAPIToModel(ctx, &plan, result)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
@@ -260,9 +417,7 @@ func (r *WifiBroadcastResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	state.Type, state.Name, state.Enabled, state.ClientIsolationEnabled, state.HideName,
-		state.MulticastToUnicastConversionEnabled, state.UapsdEnabled,
-		state.SecurityType, state.NetworkType, state.NetworkID = wifiBroadcastAPIToModel(result)
+	resp.Diagnostics.Append(wifiBroadcastAPIToModel(ctx, &state, result)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, state)...)
 }
@@ -287,7 +442,11 @@ func (r *WifiBroadcastResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	broadcast := wifiBroadcastModelToAPI(plan, passphraseWO)
+	broadcast, diags := wifiBroadcastModelToAPI(ctx, plan, passphraseWO)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	result, err := r.client.UpdateWifiBroadcast(ctx, plan.SiteID.ValueString(), state.ID.ValueString(), broadcast)
 	if err != nil {
@@ -296,9 +455,7 @@ func (r *WifiBroadcastResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	plan.ID = state.ID
-	plan.Type, plan.Name, plan.Enabled, plan.ClientIsolationEnabled, plan.HideName,
-		plan.MulticastToUnicastConversionEnabled, plan.UapsdEnabled,
-		plan.SecurityType, plan.NetworkType, plan.NetworkID = wifiBroadcastAPIToModel(result)
+	resp.Diagnostics.Append(wifiBroadcastAPIToModel(ctx, &plan, result)...)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, plan)...)
 }
